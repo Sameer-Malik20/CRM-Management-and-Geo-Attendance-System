@@ -178,5 +178,5 @@ flutter build apk --debug --dart-define=FACE_API_BASE_URL=https://susageo-face-b
 
 ## New Updated Legacy Project Credits
 
-- <a href="https://github.com/deepaktiwari88">Sameer Malik</a>
+- <a href="https://github.com/Sameer-Malik20">Sameer Malik</a>
 
