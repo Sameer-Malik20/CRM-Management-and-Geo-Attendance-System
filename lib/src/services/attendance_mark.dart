@@ -1,7 +1,7 @@
-import 'package:easy_geofencing/enums/geofence_status.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:geo_attendance_system/src/models/office.dart';
+import 'package:geo_attendance_system/src/services/geofencing.dart';
 import 'package:geo_attendance_system/src/ui/widgets/Info_dialog_box.dart';
 import 'package:location/location.dart';
 
@@ -97,105 +97,99 @@ bool checkSuccessiveOut(listOfAttendanceIterable) {
   return true;
 }
 
-void markInAttendance(
+Future<bool> markInAttendance(
     BuildContext context,
     Office office,
     LocationData currentPosition,
     User user,
     GeofenceStatus geoFenceStatus) async {
-  Future.delayed(Duration(seconds: 1), () {
-    DateTime dateToday = getTodayDate();
-    AttendanceDatabase.getAttendanceOfParticularDateBasedOnUID(
-            user.uid, dateToday)
-        .then((snapshot) {
-      Navigator.of(context, rootNavigator: true).pop('dialog');
-      bool isFeasible = true;
-      String errorMessage = "";
-      if (snapshot != null) {
-        var listOfAttendanceIterable = snapshot.keys;
-        if (listOfAttendanceIterable.length > 0 &&
-            !checkSuccessiveIn(listOfAttendanceIterable)) {
-          isFeasible = false;
-          errorMessage = "Not Allowed to Mark In Successively";
-        }
-      }
+  await Future.delayed(Duration(seconds: 1));
+  DateTime dateToday = getTodayDate();
+  final snapshot = await AttendanceDatabase.getAttendanceOfParticularDateBasedOnUID(
+      user.uid, dateToday);
+  Navigator.of(context, rootNavigator: true).pop('dialog');
+  bool isFeasible = true;
+  String errorMessage = "";
+  if (snapshot != null) {
+    var listOfAttendanceIterable = snapshot.keys;
+    if (listOfAttendanceIterable.length > 0 &&
+        !checkSuccessiveIn(listOfAttendanceIterable)) {
+      isFeasible = false;
+      errorMessage = "Not Allowed to Mark In Successively";
+    }
+  }
 
-      if (isFeasible && geoFenceStatus == GeofenceStatus.enter) {
-        AttendanceDatabase.markAttendance(user.uid, dateToday, office, "in")
-            .then((_) {
-          showDialogTemplate(
-              context,
-              "Attendance Info",
-              "Marked \nStatus: ${geoFenceStatus.toString()}",
-              "assets/gif/tick.gif",
-              Color.fromRGBO(51, 205, 187, 1.0),
-              "Great");
-        });
-      } else {
-        if (isFeasible) errorMessage = "Out of the allotted Location!";
-        showDialogTemplate(
-            context,
-            "Attendance Info",
-            "$errorMessage\nStatus: ${geoFenceStatus.toString()}",
-            "assets/gif/close.gif",
-            Color.fromRGBO(200, 71, 108, 1.0),
-            "Oops!");
-      }
-    });
-  });
+  if (isFeasible && geoFenceStatus == GeofenceStatus.enter) {
+    await AttendanceDatabase.markAttendance(user.uid, dateToday, office, "in");
+    showDialogTemplate(
+        context,
+        "Attendance Info",
+        "Marked \nStatus: ${geoFenceStatus.toString()}",
+        "assets/gif/tick.gif",
+        Color.fromRGBO(51, 205, 187, 1.0),
+        "Great");
+    return true;
+  } else {
+    if (isFeasible) errorMessage = "Out of the allotted Location!";
+    showDialogTemplate(
+        context,
+        "Attendance Info",
+        "$errorMessage\nStatus: ${geoFenceStatus.toString()}",
+        "assets/gif/close.gif",
+        Color.fromRGBO(200, 71, 108, 1.0),
+        "Oops!");
+    return false;
+  }
 }
 
-void markOutAttendance(
+Future<bool> markOutAttendance(
     BuildContext context,
     Office office,
     LocationData currentPosition,
     User user,
     GeofenceStatus geoFenceStatus) async {
-  Future.delayed(Duration(seconds: 1), () {
-    DateTime dateToday = getTodayDate();
-    AttendanceDatabase.getAttendanceOfParticularDateBasedOnUID(
-            user.uid, dateToday)
-        .then((snapshot) {
-      Navigator.of(context, rootNavigator: true).pop('dialog');
-      bool isFeasible = true;
-      String errorMessage = "";
+  await Future.delayed(Duration(seconds: 1));
+  DateTime dateToday = getTodayDate();
+  final snapshot = await AttendanceDatabase.getAttendanceOfParticularDateBasedOnUID(
+      user.uid, dateToday);
+  Navigator.of(context, rootNavigator: true).pop('dialog');
+  bool isFeasible = true;
+  String errorMessage = "";
 
-      if (snapshot != null) {
-        var listOfAttendanceIterable = snapshot.keys;
-        if (listOfAttendanceIterable.length > 0 &&
-            !checkSuccessiveOut(listOfAttendanceIterable)) {
-          isFeasible = false;
-          errorMessage = "Not Allowed to Mark Out Successively";
-        } else if (listOfAttendanceIterable.length == 0) {
-          isFeasible = false;
-          errorMessage = "No IN-Entry Found!";
-        }
-      } else {
-        isFeasible = false;
-        errorMessage = "No IN-Entry Found!";
-      }
+  if (snapshot != null) {
+    var listOfAttendanceIterable = snapshot.keys;
+    if (listOfAttendanceIterable.length > 0 &&
+        !checkSuccessiveOut(listOfAttendanceIterable)) {
+      isFeasible = false;
+      errorMessage = "Not Allowed to Mark Out Successively";
+    } else if (listOfAttendanceIterable.length == 0) {
+      isFeasible = false;
+      errorMessage = "No IN-Entry Found!";
+    }
+  } else {
+    isFeasible = false;
+    errorMessage = "No IN-Entry Found!";
+  }
 
-      if (isFeasible && GeofenceStatus.enter == geoFenceStatus) {
-        AttendanceDatabase.markAttendance(user.uid, dateToday, office, "out")
-            .then((_) {
-          showDialogTemplate(
-              context,
-              "Attendance Info",
-              "Marked \nStatus: ${geoFenceStatus.toString()}",
-              "assets/gif/tick.gif",
-              Color.fromRGBO(51, 205, 187, 1.0),
-              "Great");
-        });
-      } else {
-        if (isFeasible) errorMessage = "Out of the allotted Location!";
-        showDialogTemplate(
-            context,
-            "Attendance Info",
-            "$errorMessage\nStatus: ${geoFenceStatus.toString()}",
-            "assets/gif/close.gif",
-            Color.fromRGBO(200, 71, 108, 1.0),
-            "Oops!");
-      }
-    });
-  });
+  if (isFeasible && GeofenceStatus.enter == geoFenceStatus) {
+    await AttendanceDatabase.markAttendance(user.uid, dateToday, office, "out");
+    showDialogTemplate(
+        context,
+        "Attendance Info",
+        "Marked \nStatus: ${geoFenceStatus.toString()}",
+        "assets/gif/tick.gif",
+        Color.fromRGBO(51, 205, 187, 1.0),
+        "Great");
+    return true;
+  } else {
+    if (isFeasible) errorMessage = "Out of the allotted Location!";
+    showDialogTemplate(
+        context,
+        "Attendance Info",
+        "$errorMessage\nStatus: ${geoFenceStatus.toString()}",
+        "assets/gif/close.gif",
+        Color.fromRGBO(200, 71, 108, 1.0),
+        "Oops!");
+    return false;
+  }
 }

@@ -67,6 +67,31 @@ flutter pub get
 flutter run
 ```
 
+## Selfie Attendance Add-on
+
+- Selfie verification flow ab `Attendance Recorder` ke andar wired hai.
+- Face register/update karne ke liye `Profile -> Register Face` use karein.
+- Face backend `face_backend/` folder me add kiya gaya hai.
+
+### Face Backend
+
+```
+cd face_backend
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+python app.py
+```
+
+### Mobile App se Backend Connect Karna
+
+- Android emulator ke liye default URL `http://10.0.2.2:5050` use hota hai.
+- Physical Android device ke liye app run karte waqt backend IP pass karein:
+
+```
+flutter run --dart-define=FACE_API_BASE_URL=http://YOUR_PC_IP:5050
+```
+
 ## Screenshots
 
 

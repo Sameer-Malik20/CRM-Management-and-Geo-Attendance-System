@@ -73,6 +73,39 @@ class AttendanceDatabase {
     return attendanceList;
   }
 
+  static Future<List<AttendanceList>> getAttendanceListsForDateRangeBasedOnUID(
+    String uid,
+    DateTime startDate,
+    DateTime endDate,
+  ) async {
+    final normalizedStart =
+        DateTime(startDate.year, startDate.month, startDate.day);
+    final normalizedEnd = DateTime(endDate.year, endDate.month, endDate.day);
+    final snapshot = await getAttendanceBasedOnUID(uid);
+    final rawAttendance = snapshot.value is Map
+        ? Map<String, dynamic>.from(snapshot.value as Map)
+        : <String, dynamic>{};
+    final mapOfOffice = await getOfficeFromID();
+    final result = <AttendanceList>[];
+
+    for (var cursor = normalizedStart;
+        !cursor.isAfter(normalizedEnd);
+        cursor = cursor.add(const Duration(days: 1))) {
+      final formattedDate = getFormattedDate(cursor);
+      final attendanceList = AttendanceList.fromJson(
+        rawAttendance[formattedDate],
+        formattedDate,
+        mapOfOffice,
+      );
+      attendanceList.dateTime = cursor;
+      if (attendanceList.attendanceList.isNotEmpty) {
+        result.add(attendanceList);
+      }
+    }
+
+    return result;
+  }
+
   static Future markAttendance(
       String uid, DateTime dateTime, Office office, String markType) async {
     String time = getFormattedTime(dateTime);

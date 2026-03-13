@@ -1,10 +1,14 @@
+import 'dart:convert';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:geo_attendance_system/src/services/authentication.dart';
+import 'package:geo_attendance_system/src/services/fetch_user.dart';
 import 'package:geo_attendance_system/src/ui/constants/colors.dart';
 import 'package:geo_attendance_system/src/ui/constants/dashboard_tile_info.dart';
+import 'package:geo_attendance_system/src/ui/pages/admin_attendance_page.dart';
+import 'package:geo_attendance_system/src/ui/pages/admin_console.dart';
 import 'package:geo_attendance_system/src/ui/pages/pending_approval_manager.dart';
 import 'package:geo_attendance_system/src/ui/pages/profile_page.dart';
 import 'package:geo_attendance_system/src/ui/widgets/dashboard_tile.dart';
@@ -98,15 +102,6 @@ class DashboardMainPanel extends StatelessWidget {
     return widgets;
   }
 
-  List<StaggeredTile> _staggeredTiles() {
-    List<StaggeredTile> widgets = [];
-    tileData.forEach((tile) {
-      widgets.add(StaggeredTile.extent(1, 210.0));
-    });
-
-    return widgets;
-  }
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -120,13 +115,13 @@ class DashboardMainPanel extends StatelessWidget {
               topLeft: Radius.circular(16), topRight: Radius.circular(16))),
       child: Padding(
         padding: const EdgeInsets.all(4.0),
-        child: StaggeredGridView.count(
+        child: GridView.count(
           crossAxisCount: 2,
           crossAxisSpacing: 12.0,
           mainAxisSpacing: 12.0,
           padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          childAspectRatio: 0.72,
           children: _listWidget(context),
-          staggeredTiles: _staggeredTiles(),
         ),
       ),
     );
@@ -146,48 +141,18 @@ class _NavigationPanelState extends State<NavigationPanel> {
   final _databaseReference = FirebaseDatabase.instance.reference();
 
   Widget drawerTile(String title, Function() onTap, [IconData? icon]) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-      child: OutlinedButton(
-        style: ButtonStyle(
-          shape: MaterialStateProperty.resolveWith(
-            (states) => RoundedRectangleBorder(
-              borderRadius: new BorderRadius.circular(30.0),
-            ),
-          ),
-          overlayColor: MaterialStateProperty.resolveWith(
-            (states) {
-              if (states.contains(MaterialState.hovered)) {
-                return Colors.transparent;
-              }
-            },
-          ),
-          side: MaterialStateProperty.resolveWith(
-            (states) => BorderSide(
-              color: Colors.white, //Color of the border
-              style: BorderStyle.solid, //Style of the border
-              width: 0.8, //width of the border
-            ),
-          ),
+    return ListTile(
+      leading: Icon(icon, color: dashBoardColor),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontFamily: "Poppins-Medium",
+          color: Colors.black87,
+          fontSize: 16,
         ),
-        child: ListTile(
-          contentPadding: EdgeInsets.symmetric(horizontal: 5, vertical: 5),
-          leading: Icon(
-            icon,
-            size: 35,
-            color: Colors.white,
-          ),
-          title: Text(
-            title,
-            style: TextStyle(
-              fontFamily: "Poppins-Medium",
-              color: Colors.white,
-              fontSize: 18,
-            ),
-          ),
-        ),
-        onPressed: onTap,
       ),
+      trailing: const Icon(Icons.chevron_right, color: Colors.black45),
+      onTap: onTap,
     );
   }
 
@@ -208,109 +173,149 @@ class _NavigationPanelState extends State<NavigationPanel> {
   @override
   Widget build(BuildContext context) {
     return Container(
-        padding: EdgeInsets.symmetric(horizontal: 5.0),
-        color: dashBoardColor,
-        child: ListView(
-          children: <Widget>[
-            FutureBuilder(
-              future: fetchOfficeName(),
-              // ignore: missing_return
-              builder: (context, snapshot) {
-                switch (snapshot.connectionState) {
-                  case ConnectionState.none:
-                    return Text(
-                      'Press the button to fetch data',
-                      textAlign: TextAlign.center,
-                    );
-
-                  case ConnectionState.active:
-
-                  case ConnectionState.waiting:
-                    return Container();
-
-                  case ConnectionState.done:
-                    if (snapshot.hasError)
-                      return Text(
-                        'Error:\n\n${snapshot.error}',
-                        textAlign: TextAlign.center,
-                      );
-                    return Stack(children: [
-                      drawerTile("Allocated Location: ${snapshot.data}", () {},
-                          Icons.location_on),
-                    ]);
-
-                    return Container();
-                }
-              },
+      color: Colors.white,
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: <Widget>[
+          DrawerHeader(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [dashBoardColor, appbarcolor],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
             ),
-            FutureBuilder(
-              future: _databaseReference
-                  .child("users")
-                  .child(widget.user.uid)
-                  .child("isManager")
-                  .once(),
-              // ignore: missing_return
-              builder: (context, snapshot) {
-                switch (snapshot.connectionState) {
-                  case ConnectionState.none:
-                    return Text(
-                      'Press the button to fetch data',
-                      textAlign: TextAlign.center,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                FutureBuilder<Map<String, dynamic>>(
+                  future: UserDatabase.getProfileData(widget.user.uid),
+                  builder: (context, snapshot) {
+                    final imageBase64 = snapshot.data?['profileImageBase64'];
+                    final imageProvider =
+                        imageBase64 is String && imageBase64.isNotEmpty
+                            ? MemoryImage(base64Decode(imageBase64))
+                            : null;
+                    return CircleAvatar(
+                      radius: 28,
+                      backgroundColor: Colors.white24,
+                      backgroundImage: imageProvider,
+                      child: imageProvider == null
+                          ? const Icon(Icons.person, color: Colors.white, size: 28)
+                          : null,
                     );
-
-                  case ConnectionState.active:
-
-                  case ConnectionState.waiting:
-                    return Container();
-
-                  case ConnectionState.done:
-                    if (snapshot.hasError)
-                      return Text(
-                        'Error:\n\n${snapshot.error}',
-                        textAlign: TextAlign.center,
-                      );
-                    print(snapshot.data?.snapshot.value);
-                    if (snapshot.data?.snapshot.value == null ||
-                        snapshot.data?.snapshot.value == 1)
-                      // return Stack(children: [
-                      //   drawerTile("Review Pending Leaves", () {
-                      //     Navigator.of(context).push(MaterialPageRoute(
-                      //         builder: (context) =>
-                      //             LeaveApprovalByManagerWidget(
-                      //               title: "Review Leaves",
-                      //               user: widget.user,
-                      //             )));
-                      //   }, Icons.perm_identity),
-                      //   Positioned(
-                      //     child: Icon(
-                      //       Icons.notifications,
-                      //       color: Colors.yellow,
-                      //       size: 30,
-                      //     ),
-                      //     right: 17,
-                      //     height: 40,
-                      //   ),
-                      // ]);
-                      return Container();
-
-                    return Container();
-                }
-              },
+                  },
+                ),
+                const SizedBox(height: 12),
+                FutureBuilder<Map<String, dynamic>>(
+                  future: UserDatabase.getProfileData(widget.user.uid),
+                  builder: (context, snapshot) {
+                    return Text(
+                      snapshot.data?['Name']?.toString() ??
+                          widget.user.email ??
+                          "Logged In User",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  widget.user.email ?? "Logged In User",
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const Text(
+                  "Profile, attendance tools, and admin actions",
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ],
             ),
-            drawerTile("Edit your Profile", () {
-              Navigator.of(context).push(MaterialPageRoute(
-                  builder: (context) => ProfilePage(
-                        user: widget.user,
-                      )));
-            }, Icons.perm_identity),
-            drawerTile("Logout", () {
-              Auth auth = new Auth();
-              auth.signOut();
-              Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (context) => Login()),
-                  (Route<dynamic> route) => false);
-            }, Icons.exit_to_app),
-          ],
-        ));
+          ),
+          FutureBuilder<String>(
+            future: fetchOfficeName(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const SizedBox.shrink();
+              }
+
+              return Container(
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                decoration: BoxDecoration(
+                  color: Colors.blueGrey.shade50,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: drawerTile(
+                  "Allocated Site: ${snapshot.data}",
+                  () {},
+                  Icons.location_on,
+                ),
+              );
+            },
+          ),
+          FutureBuilder<DatabaseEvent>(
+            future: _databaseReference
+                .child("users")
+                .child(widget.user.uid)
+                .child("isManager")
+                .once(),
+            builder: (context, snapshot) {
+              final isManager = snapshot.data?.snapshot.value == 1;
+              if (!isManager) {
+                return const SizedBox.shrink();
+              }
+
+              return Column(
+                children: [
+                  drawerTile("Admin Attendance", () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => AdminAttendancePage(
+                          currentUser: widget.user,
+                        ),
+                      ),
+                    );
+                  }, Icons.camera_enhance),
+                  drawerTile("Admin Console", () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => AdminConsolePage(
+                          currentUser: widget.user,
+                        ),
+                      ),
+                    );
+                  }, Icons.admin_panel_settings),
+                  drawerTile("Review Pending Leaves", () {
+                    Navigator.of(context).push(MaterialPageRoute(
+                        builder: (context) => LeaveApprovalByManagerWidget(
+                              title: "Review Leaves",
+                              user: widget.user,
+                            )));
+                  }, Icons.assignment_turned_in),
+                ],
+              );
+            },
+          ),
+          drawerTile("Edit Profile", () {
+            Navigator.of(context).push(MaterialPageRoute(
+                builder: (context) => ProfilePage(
+                      user: widget.user,
+                    )));
+          }, Icons.perm_identity),
+          drawerTile("Logout", () {
+            Auth auth = new Auth();
+            auth.signOut();
+            Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (context) => Login()),
+                (Route<dynamic> route) => false);
+          }, Icons.exit_to_app),
+        ],
+      ),
+    );
   }
 }

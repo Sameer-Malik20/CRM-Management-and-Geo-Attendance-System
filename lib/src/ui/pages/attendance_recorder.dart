@@ -1,14 +1,19 @@
 import 'dart:async';
 
-import 'package:easy_geofencing/enums/geofence_status.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geo_attendance_system/src/models/user.dart' show Employee;
 import 'package:geo_attendance_system/src/services/attendance_mark.dart';
+import 'package:geo_attendance_system/src/services/fetch_attendance.dart';
 import 'package:geo_attendance_system/src/services/fetch_offices.dart';
+import 'package:geo_attendance_system/src/services/fetch_user.dart';
+import 'package:geo_attendance_system/src/services/face_attendance_api.dart';
 import 'package:geo_attendance_system/src/services/geofencing.dart';
 import 'package:geo_attendance_system/src/ui/constants/colors.dart';
+import 'package:geo_attendance_system/src/ui/pages/face_capture_page.dart';
 import 'package:geo_attendance_system/src/ui/widgets/attendance_Marker_buttons.dart';
+import 'package:geo_attendance_system/src/ui/widgets/face_backend_status_banner.dart';
 import 'package:geo_attendance_system/src/ui/widgets/loader_dialog.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
@@ -45,13 +50,23 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
   var rMax;
   var direction = 1;
   var _radius;
-  late GeoFencingService geoFencingService;
+  GeoFencingService? geoFencingService;
   GeofenceStatus geofenceStatus = GeofenceStatus.init;
+  Employee? _employee;
+  Map<String, dynamic>? _profileData;
+  Map<String, dynamic>? _todayAttendanceMap;
+  bool _isMarkingAttendance = false;
+  bool _isPanelExpanded = true;
+  Timer? _backendWarmupTimer;
+  FaceBackendWarmupInfo _backendInfo = FaceAttendanceApi.initialWarmupInfo;
 
   @override
   void initState() {
     super.initState();
     initPlatformState();
+    _loadEmployeeData();
+    _loadTodayAttendance();
+    _warmUpFaceBackend();
 
     Future.microtask(() {
       geoFencingService = GeoFencing.of(context).service
@@ -63,13 +78,53 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
   void dispose() async {
     super.dispose();
     _locationSubscription?.cancel();
-    geoFencingService.removeListener(onGeofenceStatusUpdate);
+    geoFencingService?.removeListener(onGeofenceStatusUpdate);
+    _backendWarmupTimer?.cancel();
+  }
+
+  Future<void> _warmUpFaceBackend() async {
+    _backendWarmupTimer?.cancel();
+    final info = await FaceAttendanceApi.checkServerWarmup();
+    if (!mounted) return;
+    setState(() {
+      _backendInfo = info;
+    });
+    if (info.state != FaceBackendWarmupState.ready) {
+      _backendWarmupTimer = Timer(
+        const Duration(seconds: 5),
+        _warmUpFaceBackend,
+      );
+    }
+  }
+
+  Future<void> _loadEmployeeData() async {
+    final employee = await UserDatabase.getDetailsFromUID(widget.user.uid);
+    final profileData = await UserDatabase.getProfileData(widget.user.uid);
+    if (!mounted) return;
+    setState(() {
+      _employee = employee;
+      _profileData = profileData;
+    });
+  }
+
+  Future<void> _loadTodayAttendance() async {
+    final snapshot =
+        await AttendanceDatabase.getAttendanceOfParticularDateBasedOnUID(
+      widget.user.uid,
+      DateTime.now(),
+    );
+    if (!mounted) return;
+    setState(() {
+      _todayAttendanceMap = snapshot == null
+          ? <String, dynamic>{}
+          : Map<String, dynamic>.from(snapshot as Map);
+    });
   }
 
   void onGeofenceStatusUpdate() {
     if (mounted) {
       setState(() {
-        geofenceStatus = geoFencingService.geofenceStatus;
+        geofenceStatus = geoFencingService?.geofenceStatus ?? GeofenceStatus.init;
       });
     }
   }
@@ -103,7 +158,7 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
       body: Stack(
         children: <Widget>[
           googleMap(context),
-          buildContainer(context),
+          buildAttendanceActionPanel(context),
         ],
       ),
     );
@@ -120,6 +175,7 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
         mapType: MapType.normal,
         myLocationEnabled: true,
         circles: _circles,
+        onTap: (_) => _setPanelExpanded(false),
         initialCameraPosition: CameraPosition(
             target: LatLng(_initialLat, _initialLong), zoom: _initialZoom),
         markers: _markers,
@@ -167,73 +223,323 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
     );
   }
 
-  buildContainer(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(80.0),
-      child: Align(
-        alignment: Alignment.bottomCenter,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            inOutButton("IN", Colors.green, _callMarkInFunction),
-            Spacer(flex: 20),
-            inOutButton("OUT", Colors.orangeAccent, _callMarkOutFunction),
-          ],
+  Widget buildAttendanceActionPanel(BuildContext context) {
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: SafeArea(
+        minimum: const EdgeInsets.all(18),
+        child: GestureDetector(
+          onTap: () {
+            if (!_isPanelExpanded) {
+              _setPanelExpanded(true);
+            }
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.96),
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 18,
+                  offset: Offset(0, 10),
+                ),
+              ],
+            ),
+            child: AnimatedCrossFade(
+              duration: const Duration(milliseconds: 220),
+              crossFadeState: _isPanelExpanded
+                  ? CrossFadeState.showFirst
+                  : CrossFadeState.showSecond,
+              firstChild: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 54,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: Colors.black26,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    "Selfie Attendance Required",
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _isFaceRegistered
+                        ? "Step 1: Your selfie will be verified. Step 2: Only then will IN or OUT be marked."
+                        : "Please register your face from Profile before using selfie attendance.",
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FaceBackendStatusBanner(
+                    info: _backendInfo,
+                    margin: const EdgeInsets.only(bottom: 12),
+                  ),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      _statusChip(
+                        icon: Icons.location_on,
+                        label: _locationStatusLabel,
+                        color:
+                            _currentLocation == null ? Colors.orange : Colors.green,
+                      ),
+                      _statusChip(
+                        icon: Icons.verified_user,
+                        label:
+                            _isFaceRegistered ? "Face Registered" : "Face Pending",
+                        color: _isFaceRegistered ? Colors.green : Colors.orange,
+                      ),
+                      _statusChip(
+                        icon: Icons.radar,
+                        label: _geofenceLabel,
+                        color: _geofenceColor,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: inOutButton(
+                          "SELFIE IN",
+                          Colors.green,
+                          _callMarkInFunction,
+                          context: context,
+                          enabled: _canMarkIn,
+                          disabledMessage: _markInDisabledMessage,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: inOutButton(
+                          "SELFIE OUT",
+                          Colors.orangeAccent,
+                          _callMarkOutFunction,
+                          context: context,
+                          enabled: _canMarkOut,
+                          disabledMessage: _markOutDisabledMessage,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTodayAttendanceCard(),
+                ],
+              ),
+              secondChild: _buildCollapsedAttendancePanel(context),
+            ),
+          ),
         ),
       ),
     );
   }
 
-  void _callMarkInFunction() {
-    if (geofenceStatus == GeofenceStatus.init) {
-      showDialog(
-          context: context,
-          builder: (_) => Dialog(
-                child: Container(
-                  height: 200,
-                  decoration: BoxDecoration(
-                    color: Colors.blueGrey,
-                  ),
-                  child: Center(
-                      child: Text(
-                    "Kindly retry after some time!",
-                    style: TextStyle(color: Colors.white, fontSize: 22),
-                  )),
+  Widget _buildCollapsedAttendancePanel(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: splashScreenColorTop.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: const Icon(Icons.keyboard_arrow_up, color: splashScreenColorTop),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                "Attendance Recorder",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
                 ),
-              ));
-    } else {
-      onLoadingDialog(context);
-      officeDatabase.getOfficeBasedOnUID(widget.user.uid).then((office) {
-        markInAttendance(
-            context, office, _currentLocation!, widget.user, geofenceStatus);
-      });
-    }
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _todayFirstInTime.isEmpty && _todayLastOutTime.isEmpty
+                    ? "Tap to expand and mark attendance"
+                    : "IN: ${_todayFirstInTime.isEmpty ? "--" : _todayFirstInTime} | OUT: ${_todayLastOutTime.isEmpty ? "--" : _todayLastOutTime}",
+                style: const TextStyle(
+                  color: Colors.black54,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTodayAttendanceCard() {
+    final entries = _todayTimelineEntries;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.blueGrey.shade50,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Today's Attendance",
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _summaryTile(
+                  "First IN",
+                  _todayFirstInTime.isEmpty ? "--" : _todayFirstInTime,
+                  Colors.green,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _summaryTile(
+                  "Last OUT",
+                  _todayLastOutTime.isEmpty ? "--" : _todayLastOutTime,
+                  Colors.orangeAccent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (entries.isEmpty)
+            const Text(
+              "No attendance has been marked today yet.",
+              style: TextStyle(color: Colors.black54),
+            )
+          else
+            Column(
+              children: entries
+                  .map(
+                    (entry) => Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            entry.startsWith('IN')
+                                ? Icons.login
+                                : Icons.logout,
+                            color: entry.startsWith('IN')
+                                ? Colors.green
+                                : Colors.orangeAccent,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(child: Text(entry)),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryTile(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.black54,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusChip({
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _callMarkInFunction() {
+    _startSelfieAttendanceFlow("in");
   }
 
   void _callMarkOutFunction() {
-    if (geofenceStatus == GeofenceStatus.init) {
-      showDialog(
-          context: context,
-          builder: (_) => Dialog(
-                child: Container(
-                  height: 200,
-                  decoration: BoxDecoration(
-                    color: Colors.blueGrey,
-                  ),
-                  child: Center(
-                      child: Text(
-                    "Kindly retry after some time!",
-                    style: TextStyle(color: Colors.white, fontSize: 22),
-                  )),
-                ),
-              ));
-    } else {
-      onLoadingDialog(context);
-      officeDatabase.getOfficeBasedOnUID(widget.user.uid).then((office) {
-        markOutAttendance(
-            context, office, _currentLocation!, widget.user, geofenceStatus);
-      });
-    }
+    _startSelfieAttendanceFlow("out");
   }
 
   Future<void> _gotoLocation(double lat, double long) async {
@@ -313,5 +619,228 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
     setState(() {
       _startLocation = location;
     });
+  }
+
+  Future<void> _startSelfieAttendanceFlow(String markType) async {
+    if (_isMarkingAttendance) {
+      return;
+    }
+
+    if (!_isFaceRegistered) {
+      _showRetryDialog(
+        "Please register your face from Profile before marking selfie attendance.",
+      );
+      return;
+    }
+
+    if (markType == "in" && _isCurrentlyIn) {
+      _showRetryDialog("You are already IN.");
+      return;
+    }
+
+    if (markType == "out" && !_hasOpenInEntry) {
+      _showRetryDialog(
+        _todayAttendanceKeys.isEmpty
+            ? "Please mark IN first before marking OUT."
+            : "You are already OUT.",
+      );
+      return;
+    }
+
+    if (_currentLocation == null) {
+      _showRetryDialog("Current location is still loading. Please try again.");
+      return;
+    }
+
+    if (_employee == null) {
+      _showRetryDialog("Employee profile is still loading. Please try again.");
+      return;
+    }
+
+    final office = await officeDatabase.getOfficeBasedOnUID(widget.user.uid);
+    final effectiveStatus =
+        GeoFencingService.resolveStatus(office, _currentLocation);
+
+    if (effectiveStatus == GeofenceStatus.init) {
+      _showRetryDialog("Location and site validation are still syncing. Please try again.");
+      return;
+    }
+
+    if (effectiveStatus == GeofenceStatus.exit) {
+      _showRetryDialog(
+        "You are outside the assigned site radius. Move to the site location and try again.",
+      );
+      return;
+    }
+
+    final verified = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) => FaceCapturePage(
+          title: markType == "in" ? "Selfie Check-In" : "Selfie Check-Out",
+          actionLabel: markType == "in"
+              ? "Capture Selfie & Mark In"
+              : "Capture Selfie & Mark Out",
+          employeeId: _employee!.employeeID,
+          employeeName: _employee!.firstName,
+          mode: FaceCaptureMode.verify,
+          userUid: widget.user.uid,
+        ),
+      ),
+    );
+
+    if (verified != true || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _isMarkingAttendance = true;
+    });
+
+    onLoadingDialog(context);
+    final marked = markType == "in"
+        ? await markInAttendance(
+        context,
+        office,
+        _currentLocation!,
+        widget.user,
+        effectiveStatus,
+      )
+        : await markOutAttendance(
+        context,
+        office,
+        _currentLocation!,
+        widget.user,
+        effectiveStatus,
+      );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isMarkingAttendance = false;
+    });
+
+    if (marked) {
+      await _loadTodayAttendance();
+    }
+  }
+
+  void _showRetryDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        child: Container(
+          height: 200,
+          decoration: const BoxDecoration(
+            color: Colors.blueGrey,
+          ),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white, fontSize: 22),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _setPanelExpanded(bool value) {
+    if (!mounted || _isPanelExpanded == value) {
+      return;
+    }
+    setState(() {
+      _isPanelExpanded = value;
+    });
+  }
+
+  bool get _isFaceRegistered => _profileData?['faceRegistered'] == true;
+
+  Iterable<String> get _todayAttendanceKeys =>
+      (_todayAttendanceMap?.keys ?? const <String>[]).cast<String>();
+
+  bool get _hasOpenInEntry {
+    final lastIn = _todayFirstInTime.isEmpty ? "" : findLatestIn(_todayAttendanceKeys);
+    final lastOut = _todayLastOutTime;
+    return lastIn.isNotEmpty &&
+        (lastOut.isEmpty || lastIn.compareTo(lastOut) > 0);
+  }
+
+  bool get _isCurrentlyIn => _hasOpenInEntry;
+
+  bool get _canMarkIn => !_isMarkingAttendance && !_isCurrentlyIn;
+
+  bool get _canMarkOut => !_isMarkingAttendance && _hasOpenInEntry;
+
+  String get _markInDisabledMessage {
+    if (_isMarkingAttendance) {
+      return "Attendance is being processed.";
+    }
+    if (_isCurrentlyIn) {
+      return "You are already IN.";
+    }
+    return "IN will be marked after selfie verification.";
+  }
+
+  String get _markOutDisabledMessage {
+    if (_isMarkingAttendance) {
+      return "Attendance is being processed.";
+    }
+    if (_todayAttendanceKeys.isEmpty) {
+      return "Please mark IN first.";
+    }
+    if (!_hasOpenInEntry) {
+      return "You are already OUT.";
+    }
+    return "OUT will be marked after selfie verification.";
+  }
+
+  String get _todayFirstInTime =>
+      _todayAttendanceKeys.isEmpty ? "" : findFirstIn(_todayAttendanceKeys);
+
+  String get _todayLastOutTime =>
+      _todayAttendanceKeys.isEmpty ? "" : findLatestOut(_todayAttendanceKeys);
+
+  List<String> get _todayTimelineEntries {
+    final items = _todayAttendanceKeys.toList()
+      ..sort((a, b) => a.split('-').last.compareTo(b.split('-').last));
+    return items.map((key) {
+      final markType = key.split('-').first.toUpperCase();
+      final value = _todayAttendanceMap?[key];
+      final officeKey = value is Map ? (value['office']?.toString() ?? '') : '';
+      final time =
+          value is Map ? (value['time']?.toString() ?? key.split('-').last) : key;
+      return "$markType at $time${officeKey.isNotEmpty ? " | site: $officeKey" : ""}";
+    }).toList();
+  }
+
+  String get _locationStatusLabel =>
+      _currentLocation == null ? "Location Syncing" : "Location Ready";
+
+  String get _geofenceLabel {
+    switch (geofenceStatus) {
+      case GeofenceStatus.enter:
+        return "Inside Site";
+      case GeofenceStatus.exit:
+        return "Outside Site";
+      case GeofenceStatus.init:
+        return "Site Check Syncing";
+    }
+  }
+
+  Color get _geofenceColor {
+    switch (geofenceStatus) {
+      case GeofenceStatus.enter:
+        return Colors.green;
+      case GeofenceStatus.exit:
+        return Colors.redAccent;
+      case GeofenceStatus.init:
+        return Colors.orange;
+    }
   }
 }

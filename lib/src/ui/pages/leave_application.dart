@@ -2,10 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_datetime_picker/flutter_datetime_picker.dart';
 import 'package:geo_attendance_system/src/ui/constants/colors.dart';
 import 'package:geo_attendance_system/src/ui/widgets/loader_dialog.dart';
-import 'package:grouped_buttons/grouped_buttons.dart';
 
 import 'leave_status.dart';
 
@@ -103,6 +101,50 @@ class LeaveApplicationWidgetState extends State<LeaveApplicationWidget>
     return _userRef.child(widget.user.uid).child("leaves").once();
   }
 
+  Future<void> _pickDate({required bool isFromDate}) async {
+    final initialDate =
+        isFromDate ? (_fromDateInt ?? date) : (_toDateInt ?? _fromDateInt ?? date);
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: initialDate.isBefore(date) ? date : initialDate,
+      firstDate: DateTime(date.year, date.month, date.day),
+      lastDate: DateTime(2050, 12, 31),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(primary: dashBoardColor),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
+    );
+
+    if (pickedDate == null) {
+      return;
+    }
+
+    setState(() {
+      if (isFromDate) {
+        _fromDateInt = pickedDate;
+        _fromdate = getFormattedDate(pickedDate);
+      } else {
+        _toDateInt = pickedDate;
+        _todate = getFormattedDate(pickedDate);
+      }
+      _updateLeaveCount();
+    });
+  }
+
+  void _updateLeaveCount() {
+    if (_fromDateInt == null || _toDateInt == null) {
+      leavesCount = "-";
+      return;
+    }
+
+    final difference = _toDateInt!.difference(_fromDateInt!).inDays + 1;
+    leavesCount = difference <= 0 ? "Invalid Dates" : difference.toString();
+  }
+
   List<Widget> _generateListLeaves(DataSnapshot dataSnapshot) {
     List<Widget> list = [];
     (dataSnapshot.value as Map?)?.forEach((key, value) {
@@ -131,13 +173,13 @@ class LeaveApplicationWidgetState extends State<LeaveApplicationWidget>
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
           textTheme: TextTheme(
-              bodyText1: TextStyle(
+              bodyMedium: TextStyle(
                   color: Colors.black87,
                   fontFamily: "poppins-medium",
                   fontSize: 15,
                   letterSpacing: 0.5,
                   fontWeight: FontWeight.w400),
-              button: TextStyle(
+              labelLarge: TextStyle(
                   color: Colors.black87,
                   fontFamily: "poppins-medium",
                   fontSize: 18,
@@ -170,7 +212,7 @@ class LeaveApplicationWidgetState extends State<LeaveApplicationWidget>
                                 ),
                                 Padding(
                                     padding: const EdgeInsets.all(8.0),
-                                    child: list == null
+                                    child: list.isEmpty
                                         ? LinearProgressIndicator()
                                         : Row(
                                             mainAxisAlignment:
@@ -184,9 +226,9 @@ class LeaveApplicationWidgetState extends State<LeaveApplicationWidget>
                                   child: TextFormField(
                                       readOnly: true,
                                       decoration: InputDecoration(
-                                        labelText: (_managerName == null)
-                                            ? ("Loading")
-                                            : (_managerName),
+                                        labelText: _managerName.isEmpty
+                                            ? "Loading"
+                                            : _managerName,
                                         border: OutlineInputBorder(
                                           borderSide: BorderSide(
                                               color: Colors.redAccent,
@@ -243,42 +285,7 @@ class LeaveApplicationWidgetState extends State<LeaveApplicationWidget>
                                                         Colors.white),
                                           ),
                                           onPressed: () {
-                                            DatePicker.showDatePicker(context,
-                                                theme: DatePickerTheme(
-                                                  containerHeight: 250.0,
-                                                ),
-                                                showTitleActions: true,
-                                                minTime: DateTime(date.year,
-                                                    date.month, date.day),
-                                                maxTime: DateTime(2050, 12, 31),
-                                                onConfirm: (date) {
-                                              print('confirm $date');
-                                              _fromdate =
-                                                  getFormattedDate(date);
-                                              setState(() {
-                                                _fromDateInt = date;
-
-                                                if (_todate != null) {
-                                                  setState(() {
-                                                    int _difference = _toDateInt
-                                                            ?.difference(
-                                                                _fromDateInt ??
-                                                                    _toDateInt!)
-                                                            .inDays ??
-                                                        0;
-                                                    _difference += 1;
-                                                    if (_difference <= 0)
-                                                      leavesCount =
-                                                          "Invalid Dates";
-                                                    else
-                                                      leavesCount = _difference
-                                                          .toString();
-                                                  });
-                                                }
-                                              });
-                                            },
-                                                currentTime: DateTime.now(),
-                                                locale: LocaleType.en);
+                                            _pickDate(isFromDate: true);
                                           },
                                           child: Container(
                                             alignment: Alignment.center,
@@ -332,41 +339,7 @@ class LeaveApplicationWidgetState extends State<LeaveApplicationWidget>
                                                         Colors.white),
                                           ),
                                           onPressed: () {
-                                            DatePicker.showDatePicker(context,
-                                                theme: DatePickerTheme(
-                                                  containerHeight: 250.0,
-                                                ),
-                                                showTitleActions: true,
-                                                minTime: DateTime(date.year,
-                                                    date.month, date.day),
-                                                maxTime: DateTime(2022, 12, 31),
-                                                onConfirm: (date) {
-                                              print('confirm $date');
-                                              _todate = getFormattedDate(date);
-                                              setState(() {
-                                                _toDateInt = date;
-
-                                                if (_fromDateInt != null) {
-                                                  setState(() {
-                                                    int _difference = _toDateInt
-                                                            ?.difference(
-                                                                _fromDateInt ??
-                                                                    _toDateInt!)
-                                                            .inDays ??
-                                                        0;
-                                                    _difference += 1;
-                                                    if (_difference <= 0)
-                                                      leavesCount =
-                                                          "Invalid Dates";
-                                                    else
-                                                      leavesCount = _difference
-                                                          .toString();
-                                                  });
-                                                }
-                                              });
-                                            },
-                                                currentTime: DateTime.now(),
-                                                locale: LocaleType.en);
+                                            _pickDate(isFromDate: false);
                                           },
                                           child: Container(
                                             alignment: Alignment.center,
@@ -408,31 +381,34 @@ class LeaveApplicationWidgetState extends State<LeaveApplicationWidget>
                                       const EdgeInsets.fromLTRB(0, 20, 0, 20),
                                   child: Text('Type of leave'),
                                 ),
-                                CheckboxGroup(
-                                  labels: <String>[
-                                    leaveType[0],
-                                    leaveType[1],
-                                    leaveType[2],
-                                  ],
-                                  checked: _checked,
-                                  activeColor: dashBoardColor,
-                                  onChange: (bool isChecked, String label,
-                                      int index) {
-                                    print(
-                                        "isChecked: $isChecked   label: $label  index: $index");
-                                    leaveIndex = index;
-                                  },
-                                  onSelected: (selected) => setState(() {
-                                    isSelected = true;
-                                    if (selected.length > 1) {
-                                      selected.removeAt(0);
-                                      print(
-                                          'selected length  ${selected.length}');
-                                    } else {
-                                      print("only one");
-                                    }
-                                    _checked = selected;
-                                  }),
+                                Column(
+                                  children: List<Widget>.generate(
+                                    leaveType.length,
+                                    (index) {
+                                      final label = leaveType[index];
+                                      final checked = _checked.contains(label);
+                                      return CheckboxListTile(
+                                        value: checked,
+                                        activeColor: dashBoardColor,
+                                        title: Text(label),
+                                        controlAffinity:
+                                            ListTileControlAffinity.leading,
+                                        onChanged: (bool? value) {
+                                          setState(() {
+                                            if (value ?? false) {
+                                              _checked = [label];
+                                              leaveIndex = index;
+                                              isSelected = true;
+                                            } else {
+                                              _checked = [];
+                                              leaveIndex = -1;
+                                              isSelected = false;
+                                            }
+                                          });
+                                        },
+                                      );
+                                    },
+                                  ),
                                 ),
                                 TextField(
                                   autofocus: false,

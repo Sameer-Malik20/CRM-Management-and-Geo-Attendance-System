@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:geo_attendance_system/src/services/authentication.dart';
 import 'package:geo_attendance_system/src/ui/constants/colors.dart';
 import 'package:geo_attendance_system/src/ui/pages/homepage.dart';
 import 'package:geo_attendance_system/src/ui/pages/login.dart';
+import 'package:geo_attendance_system/src/ui/widgets/susa_branding.dart';
 
 enum AuthStatus {
   NOT_DETERMINED,
@@ -71,9 +71,11 @@ class _SplashScreenState extends State<SplashScreenWidget> {
         ),
         child: Center(
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Image.asset(
-              "assets/logo/logo-white.png",
-              height: 150,
+            const SusaGeoBranding(
+              monogramSize: 120,
+              titleSize: 38,
+              subtitleSize: 14,
+              light: true,
             ),
             Container(
               padding: const EdgeInsets.only(top: 80),

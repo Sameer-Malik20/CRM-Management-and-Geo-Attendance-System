@@ -1,12 +1,13 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
+import 'package:firebase_auth/firebase_auth.dart' show User;
+import 'package:geo_attendance_system/src/services/demo_seed_service.dart';
 import 'package:geo_attendance_system/src/services/fetch_IMEI.dart';
 import 'package:geo_attendance_system/src/ui/constants/colors.dart';
 import 'package:geo_attendance_system/src/ui/pages/homepage.dart';
-import 'package:geo_attendance_system/src/ui/widgets/Info_dialog_box.dart';
+import 'package:geo_attendance_system/src/ui/widgets/susa_branding.dart';
 import 'package:geo_attendance_system/src/ui/widgets/loader_dialog.dart';
 
 import '../../services/authentication.dart';
@@ -31,6 +32,18 @@ class _LoginState extends State<Login> {
   late User _user;
   bool formSubmit = false;
   late Auth authObject;
+
+  double scaleWidth(BuildContext context, double value) {
+    return MediaQuery.of(context).size.width * (value / 750);
+  }
+
+  double scaleHeight(BuildContext context, double value) {
+    return MediaQuery.of(context).size.height * (value / 1334);
+  }
+
+  double scaleText(BuildContext context, double value) {
+    return scaleWidth(context, value).clamp(12.0, 42.0);
+  }
 
   @override
   void initState() {
@@ -57,22 +70,247 @@ class _LoginState extends State<Login> {
     if (validateAndSave()) {
       FocusScope.of(context).unfocus();
       onLoadingDialog(context);
-      String email;
+      final username = _username?.trim() ?? '';
+      if (username.contains('@')) {
+        loginUser(username);
+        return;
+      }
       try {
-        _empIdRef.child(_username!).once().then((DatabaseEvent event) {
+        _empIdRef.child(username).once().then((DatabaseEvent event) {
           final snapshot = event.snapshot;
           if (snapshot.value == null) {
             print("popped");
-            _errorMessage = "Invalid Login Details!";
+            _errorMessage = "Invalid login details.";
             Navigator.pop(context);
           } else {
-            email = snapshot.value as String;
+            final email = snapshot.value as String;
             loginUser(email);
           }
         });
       } catch (e) {
         print(e);
       }
+    }
+  }
+
+  Future<void> _showForgotPasswordDialog() async {
+    final controller = TextEditingController();
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text("Forgot Password"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                "Enter an employee ID or email address. A password reset email will be sent.",
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  hintText: "Employee ID or Email",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final value = controller.text.trim();
+                if (value.isEmpty) {
+                  return;
+                }
+
+                Navigator.of(dialogContext).pop();
+                await _sendPasswordReset(value);
+              },
+              child: const Text("Send Reset Link"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _sendPasswordReset(String employeeIdOrEmail) async {
+    onLoadingDialog(context);
+    try {
+      final email = employeeIdOrEmail.contains('@')
+          ? employeeIdOrEmail
+          : await _lookupEmailFromEmployeeId(employeeIdOrEmail);
+
+      await authObject.sendPasswordResetEmail(email);
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("A password reset email has been sent to $email."),
+        ),
+      );
+    } on firebase_auth.FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.message ?? "Password reset failed."),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<String> _lookupEmailFromEmployeeId(String employeeId) async {
+    final snapshot = (await _empIdRef.child(employeeId).once()).snapshot;
+    final value = snapshot.value;
+    if (value is String && value.trim().isNotEmpty) {
+      return value.trim();
+    }
+    throw Exception("No email mapping was found for this employee ID.");
+  }
+
+  Future<void> _showContactAdminSheet() async {
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Contact Admin",
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  "Use the button below to create demo credentials. This will add test super admin, admin, and employee accounts to Firebase Auth and Realtime Database.",
+                ),
+                const SizedBox(height: 16),
+                _credentialCard(
+                  title: "Super Admin",
+                  loginId: "Email Login",
+                  email: DemoSeedService.superAdminCredentials.email,
+                  password: DemoSeedService.superAdminCredentials.password,
+                ),
+                const SizedBox(height: 12),
+                _credentialCard(
+                  title: "Demo Admin",
+                  loginId: DemoSeedService.adminCredentials.employeeId,
+                  email: DemoSeedService.adminCredentials.email,
+                  password: DemoSeedService.adminCredentials.password,
+                ),
+                const SizedBox(height: 12),
+                _credentialCard(
+                  title: "Demo Employee",
+                  loginId: DemoSeedService.employeeCredentials.employeeId,
+                  email: DemoSeedService.employeeCredentials.email,
+                  password: DemoSeedService.employeeCredentials.password,
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      Navigator.of(sheetContext).pop();
+                      await _seedDemoCredentials();
+                    },
+                    child: const Text("Create / Refresh Demo Credentials"),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _credentialCard({
+    required String title,
+    required String loginId,
+    required String email,
+    required String password,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.blueGrey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blueGrey.shade100),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text("Login ID: $loginId"),
+          Text("Email: $email"),
+          Text("Password: $password"),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _seedDemoCredentials() async {
+    onLoadingDialog(context);
+    try {
+      final result = await DemoSeedService.seedDemoData();
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Demo users ready. Super Admin: ${result.superAdmin.email} | Admin: ${result.admin.employeeId} | Employee: ${result.employee.employeeId}",
+          ),
+        ),
+      );
+    } on firebase_auth.FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.message ?? "Demo credentials could not be created."),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString()),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -138,7 +376,7 @@ class _LoginState extends State<Login> {
       }
     } else {
       setState(() {
-        _errorMessage = "Invalid Login Details!!!!!";
+        _errorMessage = "Invalid login details.";
         _formKey.currentState?.reset();
         Navigator.of(context).pop();
       });
@@ -162,10 +400,10 @@ class _LoginState extends State<Login> {
             : Container(),
       );
 
-  Widget horizontalLine() => Padding(
+  Widget horizontalLine(BuildContext context) => Padding(
         padding: EdgeInsets.symmetric(horizontal: 16.0),
         child: Container(
-          width: ScreenUtil().setWidth(120),
+          width: scaleWidth(context, 120),
           height: 1.0,
           color: Colors.black26.withOpacity(.2),
         ),
@@ -175,7 +413,6 @@ class _LoginState extends State<Login> {
   Widget build(BuildContext context) {
     SystemChrome.setPreferredOrientations(
         [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
-    ScreenUtil.init(context, designSize: Size(750, 1334), minTextAdapt: true);
     return new Scaffold(
       backgroundColor: Colors.white,
       resizeToAvoidBottomInset: true,
@@ -212,48 +449,33 @@ class _LoginState extends State<Login> {
                 padding: EdgeInsets.only(left: 28.0, right: 28.0, top: 60.0),
                 child: Column(
                   children: <Widget>[
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.start,
+                    Column(
                       children: <Widget>[
-                        Image.asset(
-                          "assets/logo/logo.png",
-                          width: ScreenUtil().setWidth(220),
-                          height: ScreenUtil().setHeight(220),
+                        SusaGeoBranding(
+                          monogramSize: scaleWidth(context, 180),
+                          titleSize: scaleText(context, 72),
+                          subtitleSize: scaleText(context, 20),
                         ),
                         SizedBox(
-                          width: ScreenUtil().setWidth(40),
+                          height: scaleHeight(context, 18),
                         ),
-                        Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            mainAxisSize: MainAxisSize.min,
-                            children: <Widget>[
-                              Text("GeoFlix",
-                                  style: TextStyle(
-                                      fontFamily: "Poppins-Bold",
-                                      color: appbarcolor,
-                                      fontSize: ScreenUtil().setSp(90),
-                                      letterSpacing: .6,
-                                      fontWeight: FontWeight.bold)),
-                              Text("Geo-Attendance and HR Management System",
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                      fontFamily: "Poppins-Bold",
-                                      color: Colors.black54,
-                                      fontSize: ScreenUtil().setSp(25),
-                                      letterSpacing: 0.2,
-                                      fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                        )
+                        Text(
+                          "Susalabs Geo-Attendance and Workforce System",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontFamily: "Poppins-Bold",
+                              color: Colors.black54,
+                              fontSize: scaleText(context, 25),
+                              letterSpacing: 0.2,
+                              fontWeight: FontWeight.bold),
+                        ),
                       ],
                     ),
                     SizedBox(
-                      height: ScreenUtil().setHeight(90),
+                      height: scaleHeight(context, 90),
                     ),
                     formCard(),
-                    SizedBox(height: ScreenUtil().setHeight(40)),
+                    SizedBox(height: scaleHeight(context, 40)),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: <Widget>[
@@ -276,8 +498,8 @@ class _LoginState extends State<Login> {
                         ),*/
                         InkWell(
                           child: Container(
-                            width: ScreenUtil().setWidth(330),
-                            height: ScreenUtil().setHeight(100),
+                            width: scaleWidth(context, 330),
+                            height: scaleHeight(context, 100),
                             decoration: BoxDecoration(
                                 gradient: LinearGradient(colors: [
                                   splashScreenColorBottom,
@@ -309,33 +531,33 @@ class _LoginState extends State<Login> {
                       ],
                     ),
                     SizedBox(
-                      height: ScreenUtil().setHeight(40),
+                      height: scaleHeight(context, 40),
                     ),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: <Widget>[
-                        horizontalLine(),
+                        horizontalLine(context),
                         Text("Other Options",
                             style: TextStyle(
                                 fontSize: 16.0, fontFamily: "Poppins-Medium")),
-                        horizontalLine()
+                        horizontalLine(context)
                       ],
                     ),
                     SizedBox(
-                      height: ScreenUtil().setHeight(40),
+                      height: scaleHeight(context, 40),
                     ),
                     SizedBox(
-                      height: ScreenUtil().setHeight(30),
+                      height: scaleHeight(context, 30),
                     ),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: <Widget>[
                         Text(
-                          "Don't have Login Details? ",
+                          "Need login details? ",
                           style: TextStyle(fontFamily: "Poppins-Medium"),
                         ),
                         InkWell(
-                          onTap: () {},
+                          onTap: _showContactAdminSheet,
                           child: Text("Contact Admin",
                               style: TextStyle(
                                   color: splashScreenColorTop,
@@ -379,11 +601,11 @@ class _LoginState extends State<Login> {
             children: <Widget>[
               Text("Login",
                   style: TextStyle(
-                      fontSize: ScreenUtil().setSp(45),
+                      fontSize: scaleText(context, 45),
                       fontFamily: "Poppins-Bold",
                       letterSpacing: .6)),
               SizedBox(
-                height: ScreenUtil().setHeight(30),
+                height: scaleHeight(context, 30),
               ),
               Container(
                 height: 60,
@@ -396,10 +618,10 @@ class _LoginState extends State<Login> {
                         Icons.person,
                         color: dashBoardColor,
                       ),
-                      hintText: "Employee ID",
+                      hintText: "Employee ID or Super Admin Email",
                       hintStyle: TextStyle(color: Colors.grey, fontSize: 15.0)),
                   validator: (value) => value == null || value.isEmpty
-                      ? 'Username can\'t be empty'
+                      ? 'Login ID cannot be empty.'
                       : null,
                   onSaved: (value) => _username = value?.trim(),
                 ),
@@ -451,16 +673,19 @@ class _LoginState extends State<Login> {
                       style: TextStyle(
                           color: dashBoardColor,
                           fontFamily: "Poppins-Medium",
-                          fontSize: ScreenUtil().setSp(28)),
+                          fontSize: scaleText(context, 28)),
                     ),
                   ),
-                  Text(
-                    "Forgot Password?",
-                    style: TextStyle(
-                        color: dashBoardColor,
-                        fontFamily: "Poppins-Medium",
-                        fontSize: ScreenUtil().setSp(28)),
-                  )
+                  TextButton(
+                    onPressed: _showForgotPasswordDialog,
+                    child: Text(
+                      "Forgot Password?",
+                      style: TextStyle(
+                          color: splashScreenColorTop,
+                          fontFamily: "Poppins-Medium",
+                          fontSize: scaleText(context, 28)),
+                    ),
+                  ),
                 ],
               )
             ],

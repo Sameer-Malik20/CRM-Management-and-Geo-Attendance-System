@@ -85,11 +85,12 @@ class LeaveApprovalByManagerWidgetState
 //                    itemExtent: 200.0,
                     itemBuilder: (context, index) {
                       Leave leave = snapshot.data![index];
-                      if (leave.status == LeaveStatus.pending &&
-                          leave.withdrawalStatus == false)
+                      if (leave.status == LeaveStatus.pending ||
+                          leave.withdrawalStatus == true) {
                         return leaveRow(snapshot.data![index]);
+                      }
 
-                      return Container();
+                      return const SizedBox.shrink();
                     },
                   );
               }
@@ -150,6 +151,21 @@ class LeaveApprovalByManagerWidgetState
                 ),
               ],
             ),
+            Row(
+              children: [
+                Text(
+                  leave.withdrawalStatus == true
+                      ? "Employee withdrew this leave request"
+                      : "Status: Pending admin action",
+                  style: TextStyle(
+                    color: leave.withdrawalStatus ? Colors.orangeAccent : Colors.white70,
+                    fontFamily: 'poppins-medium',
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13.0,
+                  ),
+                ),
+              ],
+            ),
             Expanded(
               child: new Text(
                   "Applied on" +
@@ -164,95 +180,96 @@ class LeaveApprovalByManagerWidgetState
                       fontSize: 12.0,
                       letterSpacing: 1)),
             ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.start,
-                children: <Widget>[
-                  ElevatedButton(
-                    style: ButtonStyle(
-                      shape: MaterialStateProperty.resolveWith(
-                        (states) => RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10.0),
+            if (leave.withdrawalStatus == false)
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: <Widget>[
+                    ElevatedButton(
+                      style: ButtonStyle(
+                        shape: MaterialStateProperty.resolveWith(
+                          (states) => RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10.0),
+                          ),
                         ),
+                        backgroundColor: MaterialStateProperty.resolveWith(
+                            (states) => Colors.green),
                       ),
-                      backgroundColor: MaterialStateProperty.resolveWith(
-                          (states) => Colors.green),
-                    ),
-                    onPressed: () async {
-                      onLoadingDialog(context);
-                      int days = leave.toDate.difference(leave.fromDate).inDays;
-                      reviewLeaveDatabase
-                          .approveLeave(
-                              leave.key, leave.userUid, days, leave.type)
-                          .then((_) {
-                        Navigator.of(context, rootNavigator: true)
-                            .pop('dialog');
-                      });
-                      Future.delayed(Duration(seconds: 1), () {
-                        setState(() {});
-                      });
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Column(children: <Widget>[
-                        new Icon(Icons.check_circle,
-                            size: 20.0, color: Color(0x66FFFFFF)),
-                        new Text(
-                          'Approve',
-                          style: TextStyle(
-                              color: Color(0x66FFFFFF),
-                              fontFamily: 'poppins-medium',
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15.0),
-                        ),
-                      ]),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 30,
-                  ),
-                  ElevatedButton(
-                    style: ButtonStyle(
-                      shape: MaterialStateProperty.resolveWith(
-                        (states) => RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10.0),
-                        ),
-                      ),
-                      backgroundColor: MaterialStateProperty.resolveWith(
-                          (states) => Colors.red),
-                    ),
-                    onPressed: () async {
-                      onLoadingDialog(context);
-                      reviewLeaveDatabase
-                          .rejectLeave(leave.key, leave.userUid)
-                          .then((_) {
-                        Navigator.of(context, rootNavigator: true)
-                            .pop('dialog');
+                      onPressed: () async {
+                        onLoadingDialog(context);
+                        int days = leave.toDate.difference(leave.fromDate).inDays;
+                        reviewLeaveDatabase
+                            .approveLeave(
+                                leave.key, leave.userUid, days, leave.type)
+                            .then((_) {
+                          Navigator.of(context, rootNavigator: true)
+                              .pop('dialog');
+                        });
                         Future.delayed(Duration(seconds: 1), () {
                           setState(() {});
                         });
-                      });
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Column(children: <Widget>[
-                        new Icon(Icons.clear,
-                            size: 20.0, color: Color(0x66FFFFFF)),
-                        new Text(
-                          'Reject',
-                          style: TextStyle(
-                              color: Color(0x66FFFFFF),
-                              fontFamily: 'poppins-medium',
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15.0),
-                        ),
-                      ]),
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Column(children: <Widget>[
+                          new Icon(Icons.check_circle,
+                              size: 20.0, color: Color(0x66FFFFFF)),
+                          new Text(
+                            'Approve',
+                            style: TextStyle(
+                                color: Color(0x66FFFFFF),
+                                fontFamily: 'poppins-medium',
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15.0),
+                          ),
+                        ]),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            )
+                    SizedBox(
+                      width: 30,
+                    ),
+                    ElevatedButton(
+                      style: ButtonStyle(
+                        shape: MaterialStateProperty.resolveWith(
+                          (states) => RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10.0),
+                          ),
+                        ),
+                        backgroundColor: MaterialStateProperty.resolveWith(
+                            (states) => Colors.red),
+                      ),
+                      onPressed: () async {
+                        onLoadingDialog(context);
+                        reviewLeaveDatabase
+                            .rejectLeave(leave.key, leave.userUid)
+                            .then((_) {
+                          Navigator.of(context, rootNavigator: true)
+                              .pop('dialog');
+                          Future.delayed(Duration(seconds: 1), () {
+                            setState(() {});
+                          });
+                        });
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Column(children: <Widget>[
+                          new Icon(Icons.clear,
+                              size: 20.0, color: Color(0x66FFFFFF)),
+                          new Text(
+                            'Reject',
+                            style: TextStyle(
+                                color: Color(0x66FFFFFF),
+                                fontFamily: 'poppins-medium',
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15.0),
+                          ),
+                        ]),
+                      ),
+                    ),
+                  ],
+                ),
+              )
           ],
         ),
       ),

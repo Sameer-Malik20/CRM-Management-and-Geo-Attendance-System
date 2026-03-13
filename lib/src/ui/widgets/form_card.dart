@@ -1,12 +1,23 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 class FormCard extends StatelessWidget {
+  double _scaleWidth(BuildContext context, double value) {
+    return MediaQuery.of(context).size.width * (value / 750);
+  }
+
+  double _scaleHeight(BuildContext context, double value) {
+    return MediaQuery.of(context).size.height * (value / 1334);
+  }
+
+  double _scaleText(BuildContext context, double value) {
+    return _scaleWidth(context, value).clamp(12.0, 42.0);
+  }
+
   @override
   Widget build(BuildContext context) {
     return new Container(
       width: double.infinity,
-      height: ScreenUtil().setHeight(500),
+      height: _scaleHeight(context, 500),
       decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8.0),
@@ -27,28 +38,28 @@ class FormCard extends StatelessWidget {
           children: <Widget>[
             Text("Login",
                 style: TextStyle(
-                    fontSize: ScreenUtil().setSp(45),
+                    fontSize: _scaleText(context, 45),
                     fontFamily: "Poppins-Bold",
                     letterSpacing: .6)),
             SizedBox(
-              height: ScreenUtil().setHeight(30),
+              height: _scaleHeight(context, 30),
             ),
             Text("Username",
                 style: TextStyle(
                     fontFamily: "Poppins-Medium",
-                    fontSize: ScreenUtil().setSp(26))),
+                    fontSize: _scaleText(context, 26))),
             TextField(
               decoration: InputDecoration(
                   hintText: "username",
                   hintStyle: TextStyle(color: Colors.grey, fontSize: 12.0)),
             ),
             SizedBox(
-              height: ScreenUtil().setHeight(30),
+              height: _scaleHeight(context, 30),
             ),
             Text("Password",
                 style: TextStyle(
                     fontFamily: "Poppins-Medium",
-                    fontSize: ScreenUtil().setSp(26))),
+                    fontSize: _scaleText(context, 26))),
             TextField(
               obscureText: true,
               decoration: InputDecoration(
@@ -56,7 +67,7 @@ class FormCard extends StatelessWidget {
                   hintStyle: TextStyle(color: Colors.grey, fontSize: 12.0)),
             ),
             SizedBox(
-              height: ScreenUtil().setHeight(35),
+              height: _scaleHeight(context, 35),
             ),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
@@ -66,7 +77,7 @@ class FormCard extends StatelessWidget {
                   style: TextStyle(
                       color: Colors.blue,
                       fontFamily: "Poppins-Medium",
-                      fontSize: ScreenUtil().setSp(28)),
+                      fontSize: _scaleText(context, 28)),
                 )
               ],
             )
