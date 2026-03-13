@@ -176,9 +176,7 @@ flutter build apk --debug --dart-define=FACE_API_BASE_URL=https://susageo-face-b
 - Improved attendance history
 - Better admin role separation
 
-## Legacy Project Credits
+## New Updated Legacy Project Credits
 
-- <a href="https://github.com/deepaktiwari88">Deepak Tiwari</a>
-- <a href="https://github.com/arunav11">Arunav Sharma</a>
-- <a href="https://github.com/agargya123">Avantika Gargya</a>
-- <a href="https://github.com/divy4nsh">Divyansh Singh</a>
+- <a href="https://github.com/deepaktiwari88">Sameer Malik</a>
+
