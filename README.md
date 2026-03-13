@@ -1,81 +1,97 @@
-# Attendance system using Geo-fencing technology
+# SusaGeo - CRM Management and Geo Attendance System
 
-- Our aim for this project is to develop an Application that can help
-  both the employees and the employer in making the process of tracking
-  attendance, leaves, and live location and recording of on-field
-  worker’s attendance faster and more efficiently.
-- By making use of an HR Management application, any organisation would
-  greatly benefit by reducing error rate, decreased workload designated
-  for the management of employees, as well as increase the efficiency of
-  time and error rate for an organisation.
+SusaGeo is a Flutter-based workforce attendance and leave management application built for Android and iOS. It combines geo-fencing, selfie attendance, admin controls, and attendance history in a single mobile app experience for field teams, site workers, and managers.
+
+Last built by: Sameer Malik
+
+## Core Highlights
+
+- Flutter mobile app with one shared codebase for Android and iOS
+- Firebase Authentication and Firebase Realtime Database integration
+- Geo-fenced attendance based on allocated work sites
+- Selfie-based face registration and face verification before attendance
+- Render-hosted face backend with warm-up status handling for free-tier sleep
+- Admin and super admin management tools
+- Leave application, approval, rejection, and withdrawal tracking
+- Attendance history with day view and date-range view
 
 ## Features Included
 
-- **Employee Registration** – This feature will allow an employee to
-  register a unique identity with the system. This also encompasses
-  role-based access based on regular employee or administrator status.
-- **Location-based Attendance** - This feature will allow employees to mark
-  their attendance once the employee has reached his allocated office.
-- **Leave Management** - This feature will allow employees to apply for
-  leave and track its status.
-- **Leave Approval/Rejection** - With each employee is an associated Manager, who can approve
-or reject the leaves applied for, by an employee under him.
-- **Cloud Notification** - Push Notifications on leave status change
+### Employee Features
 
-### Admin Application
-<a href="https://github.com/deepaktiwari88/HR-Management-and-Geo-Attendance-System-Admin-App">Link to Administrator Application</a>
+- Employee login using Employee ID
+- Super admin login using email and password
+- Location-aware attendance marking
+- Selfie attendance with face verification before `IN` and `OUT`
+- Automatic `IN` / `OUT` validation to prevent duplicate marking
+- Today attendance summary with first `IN`, last `OUT`, and timeline
+- Attendance history that auto-loads today's records
+- Date-based and date-range attendance history
+- Leave application and leave status tracking
+- Profile editing
+- Password change from profile
+- Profile photo upload from camera or gallery
+- Face registration and face update from profile
 
-## Setting Up the Project
+### Admin Features
 
-### Firebase Console Set up
-Add/Replace your google-services.json (downloadable from your firebase console) file into android/app directory. The project is built upon Real time database offered by Google Firebase. It is tailored right now according to our team needs. E.g. the login functionality is using an Employee ID, which we accomplished by mapping email ID to Unique ID (Employee ID). Enable the email authentication in the Auth Tab of Firebase Project.
-<br><img src="assets/github/users.png" width="250"> <br>
-The Location of the various sites are stored in the Location Stub of RTDB with key as unique ID and parameters as
-- latitude(double)
-- longitude(double)
-- name(string)
-- radius(number in metres)
+- Admin drawer with attendance and user-management tools
+- Create employee credentials with password
+- Optional email generation for workers without smartphones
+- Edit employee profiles
+- Reset face registration state
+- Delete users from app data records
+- Allocate sites with latitude, longitude, and attendance radius
+- Single-photo admin attendance for any worker
+- Group-photo admin attendance for up to 10 workers
+- Auto-detect group photo mode for recognized workers
+- Face registration by admin for workers
+- Leave review with withdrawn leave visibility
 
-<br><img src="assets/github/location.png" width="250"> <br>
-Attendance will be added to the **"Attendance"** stub in the RTDB tree. Leave System has some specific parameters for every employee which is required to run the app.
-<br><img src="assets/github/leave.png" width="250"> <br>
-I will attach a JSON sample file(in the root directory) which you can use to prepopulate sample data in the RTDB using Import JSON feature.
-<br><img src="assets/github/sample.png" width="250"> <br>
-At last, Kindly update the google API key in the android manifest and enable the necessary Maps API on your API console. <a href="https://console.developers.google.com">Google Developer API console</a>
+### Super Admin Features
 
-### Cloud Functions
-Push Notifications has been enabled in the application to provide update regarding the Leave Application from Manager.
-```
-# Install firebase in the node environment
-npm install -g firebase-tools
+- Super admin login through email and password
+- Create and manage other admins
+- Full access across users, sites, attendance, and leave workflows
+- CSV export of full users, sites, attendance, and leave data
 
-# Login into firebase 
-firebase login
+### Face Attendance Features
 
-# Deploy the functions. Move to Cloud directory and perform this operation
-firebase deploy
-```
-For more info, please refer: <a href="https://firebase.google.com/docs/functions/get-started">Firebase Cloud Functions</a>
+- Face registration flow for employees and admin-assisted onboarding
+- Face verification before selfie attendance
+- Render-hosted backend status banner
+- Warm-up indicator for sleeping Render free-tier server
+- Green ready state when the face backend becomes available
 
-## Running the Project
+## Current Selfie Attendance Flow
 
-```
-# Install the dependencies
-flutter pub get
+1. Register face from `Profile -> Register Face`
+2. Open `Attendance Recorder`
+3. Stay inside the allocated site radius
+4. Selfie verification runs before marking attendance
+5. `IN` is disabled if the user is already `IN`
+6. `OUT` is disabled if the user is already `OUT`
 
-# Run the project
-flutter run
-```
+## Admin Attendance Flow
 
-## Selfie Attendance Add-on
+### Single Photo
 
-- Selfie verification flow ab `Attendance Recorder` ke andar wired hai.
-- Face register/update karne ke liye `Profile -> Register Face` use karein.
-- Face backend `face_backend/` folder me add kiya gaya hai.
+- Enter employee ID
+- Load the worker profile
+- Register face or mark attendance manually
 
-### Face Backend
+### Group Photo
 
-```
+- Manual mode: select up to 10 workers, then capture
+- Auto-detect mode: capture a group photo and let the backend identify recognized workers automatically
+
+## Face Backend
+
+The face backend lives in [face_backend/app.py](face_backend/app.py).
+
+### Local Run
+
+```bash
 cd face_backend
 python -m venv .venv
 .venv\Scripts\activate
@@ -83,29 +99,84 @@ pip install -r requirements.txt
 python app.py
 ```
 
-### Mobile App se Backend Connect Karna
+### Deployed Backend
 
-- Android emulator ke liye default URL `http://10.0.2.2:5050` use hota hai.
-- Physical Android device ke liye app run karte waqt backend IP pass karein:
+- Render URL: `https://susageo-face-backend.onrender.com`
+- Health check: `https://susageo-face-backend.onrender.com/health`
 
+### App-to-Backend Configuration
+
+- Default app backend URL is the deployed Render backend
+- You can override it at build/run time:
+
+```bash
+flutter run --dart-define=FACE_API_BASE_URL=https://susageo-face-backend.onrender.com
 ```
+
+For local testing on a physical device:
+
+```bash
 flutter run --dart-define=FACE_API_BASE_URL=http://YOUR_PC_IP:5050
 ```
 
-## Screenshots
+## Firebase Setup
 
+Add or replace `google-services.json` in `android/app/`.
 
-<img src="assets/github/landing.jpg" width="200" > &nbsp; <img
-src="assets/github/login.jpg" width="200"> &nbsp; <img
-src="assets/github/drawer.jpg" width="200"> &nbsp; <img
-src="assets/github/dashboard.jpg" width="200"> &nbsp; <img
-src="assets/github/make_attendance.jpg" width="200"> &nbsp; <img
-src="assets/github/mark_attendance.jpg" width="200"> &nbsp; <img
-src="assets/github/leave_make.jpg" width="200"> &nbsp; <img
-src="assets/github/leave_status.jpg" width="200"> &nbsp; <img
-src="assets/github/calendar.jpg" width="200">
+This project uses Firebase Realtime Database and Firebase Authentication. The current data model expects:
 
-## Our TEAM 🤘
+- `EmployeeID/<employeeId> -> email`
+- `users/<uid>` for profile, site allocation, and role flags
+- `location/<siteKey>` for latitude, longitude, name, and radius
+- `Attendance/<uid>` for attendance records
+- `leaves/<uid>` for leave records
+
+Enable Email/Password authentication in Firebase Auth.
+
+Sample seed data is available in:
+
+- [location-based-attendance-export.json](location-based-attendance-export.json)
+
+## Running the Project
+
+```bash
+flutter pub get
+flutter run
+```
+
+For Android debug build:
+
+```bash
+flutter build apk --debug --dart-define=FACE_API_BASE_URL=https://susageo-face-backend.onrender.com
+```
+
+## Technology Stack
+
+- Flutter
+- Dart
+- Firebase Auth
+- Firebase Realtime Database
+- Google Maps
+- Location / Geofencing
+- Flask
+- OpenCV
+- Render
+
+## Recent Additions In This Build
+
+- SusaGeo branding
+- Super admin flow
+- Face backend deployment support
+- Render warm-up status UI
+- Selfie attendance verification
+- Profile photo upload
+- Admin attendance tools
+- Auto group face detection
+- CSV export for super admin
+- Improved attendance history
+- Better admin role separation
+
+## Legacy Project Credits
 
 - <a href="https://github.com/deepaktiwari88">Deepak Tiwari</a>
 - <a href="https://github.com/arunav11">Arunav Sharma</a>
