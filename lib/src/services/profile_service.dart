@@ -5,8 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 
 class ProfileService {
-  static final DatabaseReference _database =
-      FirebaseDatabase.instance.reference();
+  static final DatabaseReference _database = FirebaseDatabase.instance.ref();
   static final FirebaseAuth _auth = FirebaseAuth.instance;
 
   Future<void> updateProfile({
@@ -40,6 +39,18 @@ class ProfileService {
     await _database.child('users').child(uid).update({
       'profileImageBase64': base64Encode(bytes),
       'profileImageUpdatedAt': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<void> updateFaceEmbedding({
+    required String uid,
+    required List<double> embedding,
+  }) async {
+    await _database.child('users').child(uid).update({
+      'faceRegistered': true,
+      'faceRegisteredAt': DateTime.now().toIso8601String(),
+      'faceEmbeddingJson': jsonEncode(embedding),
+      'faceEmbeddingVersion': 'mobilefacenet-v1',
     });
   }
 }

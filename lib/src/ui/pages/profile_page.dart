@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -8,11 +7,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:geo_attendance_system/src/models/user.dart';
 import 'package:geo_attendance_system/src/services/fetch_user.dart';
-import 'package:geo_attendance_system/src/services/face_attendance_api.dart';
+import 'package:geo_attendance_system/src/services/on_device_face_recognition_service.dart';
 import 'package:geo_attendance_system/src/services/profile_service.dart';
 import 'package:geo_attendance_system/src/ui/constants/colors.dart';
 import 'package:geo_attendance_system/src/ui/pages/face_capture_page.dart';
-import 'package:geo_attendance_system/src/ui/widgets/face_backend_status_banner.dart';
+import 'package:geo_attendance_system/src/ui/widgets/face_engine_status_banner.dart';
 import 'package:image_picker/image_picker.dart';
 
 enum AppBarBehavior { normal, pinned, floating, snapping }
@@ -122,24 +121,21 @@ class ProfilePageState extends State<ProfilePage> {
   Employee? employee;
   Map<String, dynamic>? _profileData;
   bool _savingPhoto = false;
-  Timer? _backendWarmupTimer;
-  FaceBackendWarmupInfo _backendInfo = FaceAttendanceApi.initialWarmupInfo;
+  FaceEngineStatusInfo _engineInfo = const FaceEngineStatusInfo(
+    state: FaceEngineState.loading,
+    message: 'Loading on-device face recognition...',
+  );
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
-    _warmUpFaceBackend();
-  }
-
-  @override
-  void dispose() {
-    _backendWarmupTimer?.cancel();
-    super.dispose();
+    _loadFaceEngineStatus();
   }
 
   Future<void> _loadProfile() async {
-    final loadedEmployee = await UserDatabase.getDetailsFromUID(widget.user.uid);
+    final loadedEmployee =
+        await UserDatabase.getDetailsFromUID(widget.user.uid);
     final loadedProfile = await UserDatabase.getProfileData(widget.user.uid);
     if (!mounted) return;
     setState(() {
@@ -258,7 +254,8 @@ class ProfilePageState extends State<ProfilePage> {
               TextField(
                 controller: confirmController,
                 obscureText: true,
-                decoration: const InputDecoration(labelText: "Confirm Password"),
+                decoration:
+                    const InputDecoration(labelText: "Confirm Password"),
               ),
             ],
           ),
@@ -285,7 +282,8 @@ class ProfilePageState extends State<ProfilePage> {
                   Navigator.of(context).pop();
                   _showSnackBar("Password updated successfully.");
                 } catch (error) {
-                  _showSnackBar(error.toString().replaceFirst('Exception: ', ''));
+                  _showSnackBar(
+                      error.toString().replaceFirst('Exception: ', ''));
                 }
               },
               child: const Text("Update Password"),
@@ -357,19 +355,12 @@ class ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  Future<void> _warmUpFaceBackend() async {
-    _backendWarmupTimer?.cancel();
-    final info = await FaceAttendanceApi.checkServerWarmup();
+  Future<void> _loadFaceEngineStatus() async {
+    final info = await OnDeviceFaceRecognitionService.instance.initialize();
     if (!mounted) return;
     setState(() {
-      _backendInfo = info;
+      _engineInfo = info;
     });
-    if (info.state != FaceBackendWarmupState.ready) {
-      _backendWarmupTimer = Timer(
-        const Duration(seconds: 5),
-        _warmUpFaceBackend,
-      );
-    }
   }
 
   Widget _inputField(
@@ -442,12 +433,11 @@ class ProfilePageState extends State<ProfilePage> {
                             horizontal: 10, vertical: 10),
                         child: TextButton(
                           style: ButtonStyle(
-                            padding: MaterialStateProperty.resolveWith(
+                            padding: WidgetStateProperty.resolveWith(
                               (states) =>
                                   const EdgeInsets.symmetric(horizontal: 16.0),
                             ),
-                            backgroundColor:
-                                MaterialStateProperty.resolveWith(
+                            backgroundColor: WidgetStateProperty.resolveWith(
                               (states) => Colors.blue,
                             ),
                           ),
@@ -529,8 +519,11 @@ class ProfilePageState extends State<ProfilePage> {
                                   ],
                                 ),
                                 TextButton.icon(
-                                  onPressed: _savingPhoto ? null : _showPhotoPickerSheet,
-                                  icon: const Icon(Icons.add_a_photo, color: Colors.white),
+                                  onPressed: _savingPhoto
+                                      ? null
+                                      : _showPhotoPickerSheet,
+                                  icon: const Icon(Icons.add_a_photo,
+                                      color: Colors.white),
                                   label: const Text(
                                     "Upload Photo",
                                     style: TextStyle(color: Colors.white),
@@ -632,8 +625,8 @@ class ProfilePageState extends State<ProfilePage> {
                                   ),
                                 ),
                                 const SizedBox(height: 8),
-                                FaceBackendStatusBanner(
-                                  info: _backendInfo,
+                                FaceEngineStatusBanner(
+                                  info: _engineInfo,
                                   margin: const EdgeInsets.only(bottom: 12),
                                 ),
                                 Container(
@@ -651,55 +644,58 @@ class ProfilePageState extends State<ProfilePage> {
                                     ),
                                   ),
                                   child: Padding(
-                                    padding:
-                                        const EdgeInsets.symmetric(horizontal: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6),
                                     child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        _isFaceRegistered
-                                            ? Icons.verified_user
-                                            : Icons.face_retouching_natural,
-                                        color: _isFaceRegistered
-                                            ? Colors.green.shade700
-                                            : Colors.orange.shade700,
-                                      ),
-                                      const SizedBox(height: 10),
-                                      Text(
-                                        _isFaceRegistered
-                                            ? "Face registration completed successfully"
-                                            : "Face registration is pending",
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w700,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          _isFaceRegistered
+                                              ? Icons.verified_user
+                                              : Icons.face_retouching_natural,
                                           color: _isFaceRegistered
-                                              ? Colors.green.shade800
-                                              : Colors.orange.shade800,
+                                              ? Colors.green.shade700
+                                              : Colors.orange.shade700,
                                         ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        _isFaceRegistered
-                                            ? "You can now verify your selfie before marking attendance. Use this section any time to update your registered face."
-                                            : "Register your face here before using selfie attendance.",
-                                        textAlign: TextAlign.center,
-                                        style: const TextStyle(fontSize: 13),
-                                      ),
-                                      if (_profileData?['faceRegisteredAt'] != null)
-                                        Padding(
-                                          padding: const EdgeInsets.only(top: 8),
-                                          child: Text(
-                                            "Registered at: ${_profileData?['faceRegisteredAt']}",
-                                            textAlign: TextAlign.center,
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.black54,
+                                        const SizedBox(height: 10),
+                                        Text(
+                                          _isFaceRegistered
+                                              ? "Face registration completed successfully"
+                                              : "Face registration is pending",
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w700,
+                                            color: _isFaceRegistered
+                                                ? Colors.green.shade800
+                                                : Colors.orange.shade800,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          _isFaceRegistered
+                                              ? "You can now verify your selfie on-device automatically before marking attendance. Use this section any time to update your registered face."
+                                              : "Register your face here before using automatic on-device selfie attendance.",
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(fontSize: 13),
+                                        ),
+                                        if (_profileData?['faceRegisteredAt'] !=
+                                            null)
+                                          Padding(
+                                            padding:
+                                                const EdgeInsets.only(top: 8),
+                                            child: Text(
+                                              "Registered at: ${_profileData?['faceRegisteredAt']}",
+                                              textAlign: TextAlign.center,
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.black54,
+                                              ),
                                             ),
                                           ),
-                                      ),
-                                    ],
-                                  ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(height: 12),

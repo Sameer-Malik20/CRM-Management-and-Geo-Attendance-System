@@ -17,6 +17,7 @@ REGISTER_FOLDER = BASE_DIR / "faces"
 TEMP_FOLDER = BASE_DIR / "temp"
 CASCADE_PATH = Path(cv2.data.haarcascades) / "haarcascade_frontalface_default.xml"
 FACE_DETECTOR = cv2.CascadeClassifier(str(CASCADE_PATH))
+RECOGNITION_CONFIDENCE_THRESHOLD = 72.0
 
 REGISTER_FOLDER.mkdir(parents=True, exist_ok=True)
 TEMP_FOLDER.mkdir(parents=True, exist_ok=True)
@@ -44,56 +45,89 @@ _hydrate_seed_faces()
 app = Flask(__name__)
 
 
-def _extract_face(image_path: Path):
-    image = cv2.imread(str(image_path))
+def _normalize_face_image(image):
     if image is None:
         return None
 
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    if len(image.shape) == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image
+
+    gray = cv2.equalizeHist(gray)
+    gray = cv2.GaussianBlur(gray, (3, 3), 0)
+    return cv2.resize(gray, (200, 200))
+
+
+def _extract_face_from_array(image):
+    if image is None:
+        return None
+
+    if len(image.shape) == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image
+
     faces = FACE_DETECTOR.detectMultiScale(
         gray,
-        scaleFactor=1.2,
-        minNeighbors=5,
-        minSize=(80, 80),
+        scaleFactor=1.1,
+        minNeighbors=6,
+        minSize=(90, 90),
     )
 
     if len(faces) == 0:
         return None
 
     x, y, w, h = max(faces, key=lambda face: face[2] * face[3])
-    face_region = gray[y : y + h, x : x + w]
-    return cv2.resize(face_region, (200, 200))
+    padding_x = int(w * 0.18)
+    padding_y = int(h * 0.22)
+    x1 = max(x - padding_x, 0)
+    y1 = max(y - padding_y, 0)
+    x2 = min(x + w + padding_x, gray.shape[1])
+    y2 = min(y + h + padding_y, gray.shape[0])
+    face_region = gray[y1:y2, x1:x2]
+    return _normalize_face_image(face_region)
 
 
-def _detect_faces(image_path: Path):
+def _extract_face(image_path: Path, allow_existing_crop=False):
     image = cv2.imread(str(image_path))
     if image is None:
-        return []
+        return None
 
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    faces = FACE_DETECTOR.detectMultiScale(
-        gray,
-        scaleFactor=1.2,
-        minNeighbors=5,
-        minSize=(80, 80),
-    )
+    face_region = _extract_face_from_array(image)
+    if face_region is not None:
+        return face_region
 
-    image_height, image_width = gray.shape[:2]
-    detected_faces = []
-    for x, y, w, h in sorted(faces, key=lambda face: face[0])[:10]:
-        face_region = gray[y : y + h, x : x + w]
-        if face_region.size == 0:
-            continue
-        detected_faces.append(
-            {
-                "face": cv2.resize(face_region, (200, 200)),
-                "x": round(x / image_width, 4),
-                "y": round(y / image_height, 4),
-                "w": round(w / image_width, 4),
-                "h": round(h / image_height, 4),
-            }
-        )
-    return detected_faces
+    if not allow_existing_crop:
+        return None
+
+    height, width = image.shape[:2]
+    aspect_ratio = width / max(height, 1)
+    if width < 120 or height < 120 or not 0.75 <= aspect_ratio <= 1.35:
+        return None
+
+    return _normalize_face_image(image)
+
+
+def _load_saved_face_sample(image_path: Path):
+    image = cv2.imread(str(image_path), cv2.IMREAD_GRAYSCALE)
+    if image is None:
+        return None
+
+    return _normalize_face_image(image)
+
+
+def _parse_registered_face_filename(image_path: Path):
+    if "__" in image_path.stem:
+        parts = image_path.stem.split("__", 2)
+        employee_id = parts[0]
+        employee_name = parts[2] if len(parts) > 2 else employee_id
+        return employee_id, employee_name
+
+    if "_" in image_path.stem:
+        return image_path.stem.split("_", 1)
+
+    return image_path.stem, image_path.stem
 
 
 def _load_training_data():
@@ -106,11 +140,11 @@ def _load_training_data():
         if not filename.is_file() or filename.suffix.lower() not in {".jpg", ".jpeg", ".png"}:
             continue
 
-        face_region = _extract_face(filename)
+        face_region = _load_saved_face_sample(filename)
         if face_region is None:
             continue
 
-        employee_id, employee_name = filename.stem.split("_", 1)
+        employee_id, employee_name = _parse_registered_face_filename(filename)
         if employee_id not in label_map:
             label_map[employee_id] = {
                 "label": next_label,
@@ -141,6 +175,8 @@ def register_face():
     image = request.files["image"]
     employee_name = request.form["name"].strip()
     employee_id = request.form["empId"].strip()
+    sample_key = secure_filename(request.form.get("sampleKey", "").strip())
+    replace_existing = request.form.get("replaceExisting", "false").lower() == "true"
 
     if not employee_name or not employee_id:
         return jsonify({"error": "Name and employee ID are required"}), 400
@@ -148,11 +184,21 @@ def register_face():
     temp_path = TEMP_FOLDER / "register_check.jpg"
     image.save(temp_path)
 
-    face_region = _extract_face(temp_path)
+    face_region = _extract_face(temp_path, allow_existing_crop=True)
     if face_region is None:
         return jsonify({"error": "No face detected in uploaded image"}), 400
 
-    filename = f"{employee_id}_{secure_filename(employee_name)}.png"
+    if replace_existing:
+        for existing_file in REGISTER_FOLDER.glob(f"{employee_id}*"):
+            if existing_file.is_file():
+                existing_file.unlink()
+
+    if not sample_key:
+        sample_key = datetime.datetime.now().strftime("%Y%m%d%H%M%S%f")
+
+    filename = (
+        f"{employee_id}__{sample_key}__{secure_filename(employee_name)}.png"
+    )
     save_path = REGISTER_FOLDER / filename
     cv2.imwrite(str(save_path), face_region)
 
@@ -177,7 +223,7 @@ def recognize_face():
     temp_path = TEMP_FOLDER / "verify_check.jpg"
     uploaded_image.save(temp_path)
 
-    unknown_face = _extract_face(temp_path)
+    unknown_face = _extract_face(temp_path, allow_existing_crop=True)
     if unknown_face is None:
         return jsonify({"error": "No face detected"}), 400
 
@@ -199,7 +245,7 @@ def recognize_face():
     )
 
     # Lower confidence means better match for LBPH.
-    if matched and confidence <= 65:
+    if matched and confidence <= RECOGNITION_CONFIDENCE_THRESHOLD:
         employee_id, employee_name = matched
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         return (
@@ -217,79 +263,6 @@ def recognize_face():
         )
 
     return jsonify({"status": "fail", "message": "No match found"}), 401
-
-
-@app.post("/recognize-group")
-def recognize_group():
-    if "image" not in request.files:
-        return jsonify({"error": "No image provided"}), 400
-
-    expected_ids = {
-        item.strip()
-        for item in request.form.get("expectedEmpIds", "").split(",")
-        if item.strip()
-    }
-
-    uploaded_image = request.files["image"]
-    temp_path = TEMP_FOLDER / "group_verify_check.jpg"
-    uploaded_image.save(temp_path)
-
-    detected_faces = _detect_faces(temp_path)
-    if len(detected_faces) == 0:
-        return jsonify({"error": "No face detected"}), 400
-
-    faces, labels, label_map = _load_training_data()
-    if len(faces) == 0:
-        return jsonify({"error": "No registered faces found"}), 400
-
-    recognizer = cv2.face.LBPHFaceRecognizer_create()
-    recognizer.train(faces, labels)
-
-    matches = []
-    for detected_face in detected_faces:
-        predicted_label, confidence = recognizer.predict(detected_face["face"])
-        matched = next(
-            (
-                (employee_id, payload["name"])
-                for employee_id, payload in label_map.items()
-                if payload["label"] == predicted_label
-            ),
-            None,
-        )
-
-        if not matched or confidence > 65:
-            continue
-
-        employee_id, employee_name = matched
-        if expected_ids and employee_id not in expected_ids:
-            continue
-
-        matches.append(
-            {
-                "empId": employee_id,
-                "name": employee_name,
-                "confidence": round(float(confidence), 2),
-                "x": detected_face["x"],
-                "y": detected_face["y"],
-                "w": detected_face["w"],
-                "h": detected_face["h"],
-            }
-        )
-
-    if len(matches) == 0:
-        return jsonify({"status": "fail", "message": "No expected face matched", "matches": []}), 401
-
-    return (
-        jsonify(
-            {
-                "status": "success",
-                "message": f"{len(matches)} faces matched successfully.",
-                "matches": matches,
-            }
-        ),
-        200,
-    )
-
 
 if __name__ == "__main__":
     app.run(

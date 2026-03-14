@@ -1,5 +1,5 @@
-import 'dart:io';
 import 'dart:async';
+import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -11,18 +11,14 @@ import 'package:geo_attendance_system/src/ui/widgets/face_backend_status_banner.
 enum AdminPhotoFlow { registerFace, markAttendance }
 
 class AdminPhotoCapturePage extends StatefulWidget {
-  final List<AdminUserProfile> selectedUsers;
+  final AdminUserProfile selectedUser;
   final String markType;
-  final bool groupMode;
-  final bool autoDetectAll;
   final AdminPhotoFlow flow;
 
   const AdminPhotoCapturePage({
     super.key,
-    required this.selectedUsers,
+    required this.selectedUser,
     required this.markType,
-    required this.groupMode,
-    required this.autoDetectAll,
     required this.flow,
   });
 
@@ -38,8 +34,7 @@ class _AdminPhotoCapturePageState extends State<AdminPhotoCapturePage> {
   bool _processing = false;
   String _status = 'Initializing the camera...';
   XFile? _capturedImage;
-  GroupFaceApiResponse? _groupResponse;
-  List<AdminManualAttendanceResult> _markResults = const [];
+  AdminManualAttendanceResult? _markResult;
   FaceBackendWarmupInfo _backendInfo = FaceAttendanceApi.initialWarmupInfo;
 
   @override
@@ -67,7 +62,7 @@ class _AdminPhotoCapturePageState extends State<AdminPhotoCapturePage> {
   Future<void> _initCamera() async {
     final cameras = await availableCameras();
     final preferredCamera = cameras.firstWhere(
-      (camera) => camera.lensDirection == CameraLensDirection.back,
+      (camera) => camera.lensDirection == CameraLensDirection.front,
       orElse: () => cameras.first,
     );
 
@@ -86,12 +81,8 @@ class _AdminPhotoCapturePageState extends State<AdminPhotoCapturePage> {
       _controller = controller;
       _loadingCamera = false;
       _status = widget.flow == AdminPhotoFlow.registerFace
-          ? 'Capture a clear worker photo to register the face.'
-          : widget.groupMode
-              ? widget.autoDetectAll
-                  ? 'Capture a group photo. The system will automatically detect 1 to 10 faces.'
-                  : 'Capture a group photo after selecting up to 10 workers.'
-              : 'Capture a single worker photo to mark attendance.';
+          ? 'Center the worker face and capture a face-lock style scan.'
+          : 'Center the worker face and capture attendance.';
     });
   }
 
@@ -110,22 +101,22 @@ class _AdminPhotoCapturePageState extends State<AdminPhotoCapturePage> {
     setState(() {
       _processing = true;
       _status = widget.flow == AdminPhotoFlow.registerFace
-          ? 'Registering face...'
-          : 'Recognizing faces and processing attendance...';
+          ? 'Registering worker face...'
+          : 'Recognizing face and marking attendance...';
     });
 
     try {
       final image = await _controller!.takePicture();
       if (widget.flow == AdminPhotoFlow.registerFace) {
-        final profile = widget.selectedUsers.first;
         final response = await FaceAttendanceApi.registerFace(
           imagePath: image.path,
-          employeeId: profile.employeeId,
-          employeeName: profile.name,
+          employeeId: widget.selectedUser.employeeId,
+          employeeName: widget.selectedUser.name,
+          replaceExisting: true,
         );
         if (response.success) {
           await _adminService.updateFaceRegistrationStatus(
-            uid: profile.uid,
+            uid: widget.selectedUser.uid,
             registered: true,
           );
         }
@@ -138,35 +129,30 @@ class _AdminPhotoCapturePageState extends State<AdminPhotoCapturePage> {
         return;
       }
 
-      final groupResponse = await FaceAttendanceApi.recognizeGroup(
+      final response = await FaceAttendanceApi.verifyFace(
         imagePath: image.path,
-        expectedEmployeeIds: widget.autoDetectAll
-            ? const []
-            : widget.selectedUsers.map((user) => user.employeeId).toList(),
+        expectedEmployeeId: widget.selectedUser.employeeId,
       );
 
-      final matchedProfiles = widget.selectedUsers
-          .where(
-            (profile) => groupResponse.matches.any(
-              (match) => match.employeeId == profile.employeeId,
-            ),
-          )
-          .toList();
-
-      final results = matchedProfiles.isEmpty
-          ? const <AdminManualAttendanceResult>[]
-          : await _adminService.markManualAttendanceForProfiles(
-              profiles: matchedProfiles,
-              markType: widget.markType,
-            );
+      AdminManualAttendanceResult? markResult;
+      if (response.success) {
+        final results = await _adminService.markManualAttendanceForProfiles(
+          profiles: [widget.selectedUser],
+          markType: widget.markType,
+        );
+        if (results.isNotEmpty) {
+          markResult = results.first;
+        }
+      }
 
       if (!mounted) return;
       setState(() {
         _capturedImage = image;
-        _groupResponse = groupResponse;
-        _markResults = results;
+        _markResult = markResult;
         _processing = false;
-        _status = groupResponse.message;
+        _status = response.success
+            ? (markResult?.message ?? response.message)
+            : response.message;
       });
     } catch (error) {
       if (!mounted) return;
@@ -185,9 +171,7 @@ class _AdminPhotoCapturePageState extends State<AdminPhotoCapturePage> {
         title: Text(
           widget.flow == AdminPhotoFlow.registerFace
               ? 'Register Worker Face'
-              : widget.groupMode
-                  ? 'Group Attendance Photo'
-                  : 'Single Attendance Photo',
+              : 'Single Attendance Photo',
         ),
       ),
       body: SafeArea(
@@ -219,7 +203,9 @@ class _AdminPhotoCapturePageState extends State<AdminPhotoCapturePage> {
                       backgroundColor: splashScreenColorTop,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    onPressed: _loadingCamera || _processing ? null : _captureAndProcess,
+                    onPressed: _loadingCamera || _processing
+                        ? null
+                        : _captureAndProcess,
                     icon: _processing
                         ? const SizedBox(
                             width: 18,
@@ -233,7 +219,7 @@ class _AdminPhotoCapturePageState extends State<AdminPhotoCapturePage> {
                     label: Text(
                       widget.flow == AdminPhotoFlow.registerFace
                           ? 'Capture & Register Face'
-                          : 'Capture & Process Attendance',
+                          : 'Capture & Mark Attendance',
                     ),
                   ),
                 )
@@ -245,8 +231,7 @@ class _AdminPhotoCapturePageState extends State<AdminPhotoCapturePage> {
                         onPressed: () {
                           setState(() {
                             _capturedImage = null;
-                            _groupResponse = null;
-                            _markResults = const [];
+                            _markResult = null;
                           });
                         },
                         child: const Text('Retake'),
@@ -289,62 +274,26 @@ class _AdminPhotoCapturePageState extends State<AdminPhotoCapturePage> {
             aspectRatio: 3 / 4,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(24),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.file(
-                    File(_capturedImage!.path),
-                    fit: BoxFit.fill,
-                  ),
-                  if (_groupResponse != null)
-                    ..._groupResponse!.matches.map(
-                      (match) => Positioned(
-                        left: match.x * MediaQuery.of(context).size.width * 0.82,
-                        top: match.y * 420,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black87,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            match.employeeId,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+              child: Image.file(
+                File(_capturedImage!.path),
+                fit: BoxFit.cover,
               ),
             ),
           ),
           const SizedBox(height: 12),
-          if (_markResults.isNotEmpty)
-            Column(
-              children: _markResults
-                  .map(
-                    (result) => Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: result.success
-                            ? Colors.green.withValues(alpha: 0.12)
-                            : Colors.red.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(
-                        "${result.employeeId} - ${result.employeeName}: ${result.message}",
-                      ),
-                    ),
-                  )
-                  .toList(),
+          if (_markResult != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _markResult!.success
+                    ? Colors.green.withValues(alpha: 0.12)
+                    : Colors.red.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                "${_markResult!.employeeId} - ${_markResult!.employeeName}: ${_markResult!.message}",
+              ),
             ),
         ],
       ),

@@ -8,12 +8,12 @@ import 'package:geo_attendance_system/src/services/attendance_mark.dart';
 import 'package:geo_attendance_system/src/services/fetch_attendance.dart';
 import 'package:geo_attendance_system/src/services/fetch_offices.dart';
 import 'package:geo_attendance_system/src/services/fetch_user.dart';
-import 'package:geo_attendance_system/src/services/face_attendance_api.dart';
 import 'package:geo_attendance_system/src/services/geofencing.dart';
+import 'package:geo_attendance_system/src/services/on_device_face_recognition_service.dart';
 import 'package:geo_attendance_system/src/ui/constants/colors.dart';
 import 'package:geo_attendance_system/src/ui/pages/face_capture_page.dart';
 import 'package:geo_attendance_system/src/ui/widgets/attendance_Marker_buttons.dart';
-import 'package:geo_attendance_system/src/ui/widgets/face_backend_status_banner.dart';
+import 'package:geo_attendance_system/src/ui/widgets/face_engine_status_banner.dart';
 import 'package:geo_attendance_system/src/ui/widgets/loader_dialog.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
@@ -38,7 +38,6 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
   StreamSubscription<LocationData>? _locationSubscription;
   LocationData? _currentLocation;
   LatLng previousLocation = LatLng(0, 0);
-  LocationData? _startLocation;
   Set<Marker> _markers = {};
   Set<Circle> _circles = new Set();
 
@@ -57,8 +56,10 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
   Map<String, dynamic>? _todayAttendanceMap;
   bool _isMarkingAttendance = false;
   bool _isPanelExpanded = true;
-  Timer? _backendWarmupTimer;
-  FaceBackendWarmupInfo _backendInfo = FaceAttendanceApi.initialWarmupInfo;
+  FaceEngineStatusInfo _engineInfo = const FaceEngineStatusInfo(
+    state: FaceEngineState.loading,
+    message: 'Loading on-device face recognition...',
+  );
 
   @override
   void initState() {
@@ -66,7 +67,7 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
     initPlatformState();
     _loadEmployeeData();
     _loadTodayAttendance();
-    _warmUpFaceBackend();
+    _loadFaceEngineStatus();
 
     Future.microtask(() {
       geoFencingService = GeoFencing.of(context).service
@@ -79,22 +80,14 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
     super.dispose();
     _locationSubscription?.cancel();
     geoFencingService?.removeListener(onGeofenceStatusUpdate);
-    _backendWarmupTimer?.cancel();
   }
 
-  Future<void> _warmUpFaceBackend() async {
-    _backendWarmupTimer?.cancel();
-    final info = await FaceAttendanceApi.checkServerWarmup();
+  Future<void> _loadFaceEngineStatus() async {
+    final info = await OnDeviceFaceRecognitionService.instance.initialize();
     if (!mounted) return;
     setState(() {
-      _backendInfo = info;
+      _engineInfo = info;
     });
-    if (info.state != FaceBackendWarmupState.ready) {
-      _backendWarmupTimer = Timer(
-        const Duration(seconds: 5),
-        _warmUpFaceBackend,
-      );
-    }
   }
 
   Future<void> _loadEmployeeData() async {
@@ -124,7 +117,8 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
   void onGeofenceStatusUpdate() {
     if (mounted) {
       setState(() {
-        geofenceStatus = geoFencingService?.geofenceStatus ?? GeofenceStatus.init;
+        geofenceStatus =
+            geoFencingService?.geofenceStatus ?? GeofenceStatus.init;
       });
     }
   }
@@ -208,7 +202,7 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
                       radius: radiusFinal,
                       strokeColor: Colors.blueGrey,
                       strokeWidth: 5,
-                      fillColor: Colors.blueGrey.withOpacity(0.6 * _par),
+                      fillColor: Colors.blueGrey.withValues(alpha: 0.6 * _par),
                     ));
                   });
 //            circleOption.fillOpacity = 0.6 * _par;
@@ -240,7 +234,7 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
             width: double.infinity,
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.96),
+              color: Colors.white.withValues(alpha: 0.96),
               borderRadius: BorderRadius.circular(24),
               boxShadow: const [
                 BoxShadow(
@@ -280,7 +274,7 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
                   const SizedBox(height: 8),
                   Text(
                     _isFaceRegistered
-                        ? "Step 1: Your selfie will be verified. Step 2: Only then will IN or OUT be marked."
+                        ? "Step 1: Your selfie will be verified automatically. Step 2: Only then will IN or OUT be marked."
                         : "Please register your face from Profile before using selfie attendance.",
                     style: const TextStyle(
                       fontSize: 14,
@@ -288,8 +282,8 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  FaceBackendStatusBanner(
-                    info: _backendInfo,
+                  FaceEngineStatusBanner(
+                    info: _engineInfo,
                     margin: const EdgeInsets.only(bottom: 12),
                   ),
                   Wrap(
@@ -299,13 +293,15 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
                       _statusChip(
                         icon: Icons.location_on,
                         label: _locationStatusLabel,
-                        color:
-                            _currentLocation == null ? Colors.orange : Colors.green,
+                        color: _currentLocation == null
+                            ? Colors.orange
+                            : Colors.green,
                       ),
                       _statusChip(
                         icon: Icons.verified_user,
-                        label:
-                            _isFaceRegistered ? "Face Registered" : "Face Pending",
+                        label: _isFaceRegistered
+                            ? "Face Registered"
+                            : "Face Pending",
                         color: _isFaceRegistered ? Colors.green : Colors.orange,
                       ),
                       _statusChip(
@@ -360,10 +356,11 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: splashScreenColorTop.withOpacity(0.12),
+            color: splashScreenColorTop.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(14),
           ),
-          child: const Icon(Icons.keyboard_arrow_up, color: splashScreenColorTop),
+          child:
+              const Icon(Icons.keyboard_arrow_up, color: splashScreenColorTop),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -454,9 +451,7 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
                       child: Row(
                         children: [
                           Icon(
-                            entry.startsWith('IN')
-                                ? Icons.login
-                                : Icons.logout,
+                            entry.startsWith('IN') ? Icons.login : Icons.logout,
                             color: entry.startsWith('IN')
                                 ? Colors.green
                                 : Colors.orangeAccent,
@@ -513,9 +508,9 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: color.withOpacity(0.35)),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -542,17 +537,10 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
     _startSelfieAttendanceFlow("out");
   }
 
-  Future<void> _gotoLocation(double lat, double long) async {
-    final GoogleMapController controller = await _controller.future;
-    controller.animateCamera(CameraUpdate.newCameraPosition(CameraPosition(
-        target: LatLng(lat, long), zoom: 15, tilt: 50.0, bearing: 45.0)));
-  }
-
   initPlatformState() async {
     await _locationService.changeSettings(
         accuracy: LocationAccuracy.balanced, interval: 1000);
 
-    LocationData? location;
     // Platform messages may fail, so we use a try/catch PlatformException.
     try {
       bool serviceStatus = await _locationService.serviceEnabled();
@@ -561,7 +549,7 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
         _permission = await _locationService.requestPermission();
         print("Permission: $_permission");
         if (_permission == PermissionStatus.granted) {
-          location = await _locationService.getLocation();
+          await _locationService.getLocation();
 
           _locationSubscription = _locationService.onLocationChanged
               .listen((LocationData result) async {
@@ -613,12 +601,7 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
       } else if (e.code == 'SERVICE_STATUS_ERROR') {
         error = e.message;
       }
-      location = null;
     }
-
-    setState(() {
-      _startLocation = location;
-    });
   }
 
   Future<void> _startSelfieAttendanceFlow(String markType) async {
@@ -662,7 +645,8 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
         GeoFencingService.resolveStatus(office, _currentLocation);
 
     if (effectiveStatus == GeofenceStatus.init) {
-      _showRetryDialog("Location and site validation are still syncing. Please try again.");
+      _showRetryDialog(
+          "Location and site validation are still syncing. Please try again.");
       return;
     }
 
@@ -699,19 +683,19 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
     onLoadingDialog(context);
     final marked = markType == "in"
         ? await markInAttendance(
-        context,
-        office,
-        _currentLocation!,
-        widget.user,
-        effectiveStatus,
-      )
+            context,
+            office,
+            _currentLocation!,
+            widget.user,
+            effectiveStatus,
+          )
         : await markOutAttendance(
-        context,
-        office,
-        _currentLocation!,
-        widget.user,
-        effectiveStatus,
-      );
+            context,
+            office,
+            _currentLocation!,
+            widget.user,
+            effectiveStatus,
+          );
 
     if (!mounted) {
       return;
@@ -765,7 +749,8 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
       (_todayAttendanceMap?.keys ?? const <String>[]).cast<String>();
 
   bool get _hasOpenInEntry {
-    final lastIn = _todayFirstInTime.isEmpty ? "" : findLatestIn(_todayAttendanceKeys);
+    final lastIn =
+        _todayFirstInTime.isEmpty ? "" : findLatestIn(_todayAttendanceKeys);
     final lastOut = _todayLastOutTime;
     return lastIn.isNotEmpty &&
         (lastOut.isEmpty || lastIn.compareTo(lastOut) > 0);
@@ -813,8 +798,9 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
       final markType = key.split('-').first.toUpperCase();
       final value = _todayAttendanceMap?[key];
       final officeKey = value is Map ? (value['office']?.toString() ?? '') : '';
-      final time =
-          value is Map ? (value['time']?.toString() ?? key.split('-').last) : key;
+      final time = value is Map
+          ? (value['time']?.toString() ?? key.split('-').last)
+          : key;
       return "$markType at $time${officeKey.isNotEmpty ? " | site: $officeKey" : ""}";
     }).toList();
   }

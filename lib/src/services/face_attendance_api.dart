@@ -20,38 +20,6 @@ class FaceApiResponse {
   });
 }
 
-class FaceDetectionMatch {
-  final String employeeId;
-  final String employeeName;
-  final double confidence;
-  final double x;
-  final double y;
-  final double width;
-  final double height;
-
-  FaceDetectionMatch({
-    required this.employeeId,
-    required this.employeeName,
-    required this.confidence,
-    required this.x,
-    required this.y,
-    required this.width,
-    required this.height,
-  });
-}
-
-class GroupFaceApiResponse {
-  final bool success;
-  final String message;
-  final List<FaceDetectionMatch> matches;
-
-  GroupFaceApiResponse({
-    required this.success,
-    required this.message,
-    required this.matches,
-  });
-}
-
 enum FaceBackendWarmupState { checking, warmingUp, ready, unavailable }
 
 class FaceBackendWarmupInfo {
@@ -98,27 +66,33 @@ class FaceAttendanceApi {
         );
       }
 
+      if (!usesRender &&
+          <int>{408, 429, 500, 502, 503, 504}.contains(response.statusCode)) {
+        return const FaceBackendWarmupInfo(
+          state: FaceBackendWarmupState.warmingUp,
+          message: 'Face backend is starting...',
+        );
+      }
+
       return FaceBackendWarmupInfo(
         state: FaceBackendWarmupState.unavailable,
         message: 'Face backend unavailable (${response.statusCode}).',
       );
     } on TimeoutException {
       return FaceBackendWarmupInfo(
-        state: usesRender
-            ? FaceBackendWarmupState.warmingUp
-            : FaceBackendWarmupState.unavailable,
+        state: FaceBackendWarmupState.warmingUp,
         message: usesRender
             ? 'Render server is warming up...'
-            : 'Face backend request timed out.',
+            : 'Face backend is starting...',
       );
     } catch (_) {
       return FaceBackendWarmupInfo(
         state: usesRender
             ? FaceBackendWarmupState.warmingUp
-            : FaceBackendWarmupState.unavailable,
+            : FaceBackendWarmupState.warmingUp,
         message: usesRender
             ? 'Render server is warming up...'
-            : 'Face backend unavailable.',
+            : 'Face backend is starting...',
       );
     }
   }
@@ -127,6 +101,8 @@ class FaceAttendanceApi {
     required String imagePath,
     required String employeeId,
     required String employeeName,
+    String? sampleKey,
+    bool replaceExisting = false,
   }) async {
     try {
       final request = http.MultipartRequest(
@@ -135,6 +111,7 @@ class FaceAttendanceApi {
       )
         ..fields['empId'] = employeeId
         ..fields['name'] = employeeName
+        ..fields['replaceExisting'] = replaceExisting.toString()
         ..files.add(
           await http.MultipartFile.fromPath(
             'image',
@@ -142,6 +119,10 @@ class FaceAttendanceApi {
             contentType: MediaType('image', 'jpeg'),
           ),
         );
+
+      if (sampleKey != null && sampleKey.trim().isNotEmpty) {
+        request.fields['sampleKey'] = sampleKey.trim();
+      }
 
       final response = await request.send();
       final body = await response.stream.bytesToString();
@@ -183,8 +164,7 @@ class FaceAttendanceApi {
       final request = http.MultipartRequest(
         'POST',
         Uri.parse('$baseUrl/recognize'),
-      )
-        ..files.add(
+      )..files.add(
           await http.MultipartFile.fromPath(
             'image',
             imagePath,
@@ -233,69 +213,6 @@ class FaceAttendanceApi {
         success: false,
         message:
             'Could not connect to the face server. Please check the backend URL and server status.',
-      );
-    }
-  }
-
-  static Future<GroupFaceApiResponse> recognizeGroup({
-    required String imagePath,
-    List<String> expectedEmployeeIds = const [],
-  }) async {
-    try {
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$baseUrl/recognize-group'),
-      )
-        ..fields['expectedEmpIds'] = expectedEmployeeIds.join(',')
-        ..files.add(
-          await http.MultipartFile.fromPath(
-            'image',
-            imagePath,
-            contentType: MediaType('image', 'jpeg'),
-          ),
-        );
-
-      final response = await request.send();
-      final body = await response.stream.bytesToString();
-      final payload = _decodePayload(body);
-      final rawMatches = payload['matches'];
-      final matches = <FaceDetectionMatch>[];
-
-      if (rawMatches is List) {
-        for (final item in rawMatches) {
-          if (item is Map) {
-            matches.add(
-              FaceDetectionMatch(
-                employeeId: item['empId']?.toString() ?? '',
-                employeeName: item['name']?.toString() ?? '',
-                confidence:
-                    double.tryParse(item['confidence']?.toString() ?? '') ?? 0,
-                x: double.tryParse(item['x']?.toString() ?? '') ?? 0,
-                y: double.tryParse(item['y']?.toString() ?? '') ?? 0,
-                width: double.tryParse(item['w']?.toString() ?? '') ?? 0,
-                height: double.tryParse(item['h']?.toString() ?? '') ?? 0,
-              ),
-            );
-          }
-        }
-      }
-
-      return GroupFaceApiResponse(
-        success: response.statusCode == 200,
-        message: _extractMessage(
-          payload,
-          response.statusCode == 200
-              ? 'Faces detected successfully.'
-              : 'Group recognition failed.',
-        ),
-        matches: matches,
-      );
-    } catch (_) {
-      return GroupFaceApiResponse(
-        success: false,
-        message:
-            'Could not connect to the face server. Please check the backend URL and server status.',
-        matches: const [],
       );
     }
   }
