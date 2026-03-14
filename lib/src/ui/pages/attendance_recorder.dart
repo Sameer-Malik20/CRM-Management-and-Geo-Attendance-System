@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -218,6 +219,9 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
   }
 
   Widget buildAttendanceActionPanel(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final expandedPanelMaxHeight = math.min(screenHeight * 0.5, 420.0);
+
     return Align(
       alignment: Alignment.bottomCenter,
       child: SafeArea(
@@ -232,7 +236,10 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
             duration: const Duration(milliseconds: 260),
             curve: Curves.easeOutCubic,
             width: double.infinity,
-            padding: const EdgeInsets.all(18),
+            constraints: BoxConstraints(
+              maxHeight: _isPanelExpanded ? expandedPanelMaxHeight : 92,
+            ),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.96),
               borderRadius: BorderRadius.circular(24),
@@ -249,101 +256,115 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
               crossFadeState: _isPanelExpanded
                   ? CrossFadeState.showFirst
                   : CrossFadeState.showSecond,
-              firstChild: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 54,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: Colors.black26,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  const Text(
-                    "Selfie Attendance Required",
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _isFaceRegistered
-                        ? "Step 1: Your selfie will be verified automatically. Step 2: Only then will IN or OUT be marked."
-                        : "Please register your face from Profile before using selfie attendance.",
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  FaceEngineStatusBanner(
-                    info: _engineInfo,
-                    margin: const EdgeInsets.only(bottom: 12),
-                  ),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      _statusChip(
-                        icon: Icons.location_on,
-                        label: _locationStatusLabel,
-                        color: _currentLocation == null
-                            ? Colors.orange
-                            : Colors.green,
-                      ),
-                      _statusChip(
-                        icon: Icons.verified_user,
-                        label: _isFaceRegistered
-                            ? "Face Registered"
-                            : "Face Pending",
-                        color: _isFaceRegistered ? Colors.green : Colors.orange,
-                      ),
-                      _statusChip(
-                        icon: Icons.radar,
-                        label: _geofenceLabel,
-                        color: _geofenceColor,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: inOutButton(
-                          "SELFIE IN",
-                          Colors.green,
-                          _callMarkInFunction,
-                          context: context,
-                          enabled: _canMarkIn,
-                          disabledMessage: _markInDisabledMessage,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: inOutButton(
-                          "SELFIE OUT",
-                          Colors.orangeAccent,
-                          _callMarkOutFunction,
-                          context: context,
-                          enabled: _canMarkOut,
-                          disabledMessage: _markOutDisabledMessage,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  _buildTodayAttendanceCard(),
-                ],
+              firstChild: _buildExpandedAttendancePanel(
+                context,
+                expandedPanelMaxHeight,
               ),
               secondChild: _buildCollapsedAttendancePanel(context),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExpandedAttendancePanel(
+    BuildContext context,
+    double expandedPanelMaxHeight,
+  ) {
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: expandedPanelMaxHeight - 32,
+      ),
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 54,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.black26,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              "Selfie Attendance Required",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _isFaceRegistered
+                  ? "Step 1: Your selfie will be verified automatically. Step 2: Only then will IN or OUT be marked."
+                  : "Please register your face from Profile before using selfie attendance.",
+              style: const TextStyle(
+                fontSize: 13,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 10),
+            FaceEngineStatusBanner(
+              info: _engineInfo,
+              margin: const EdgeInsets.only(bottom: 10),
+            ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _statusChip(
+                  icon: Icons.location_on,
+                  label: _locationStatusLabel,
+                  color: _currentLocation == null ? Colors.orange : Colors.green,
+                ),
+                _statusChip(
+                  icon: Icons.verified_user,
+                  label: _isFaceRegistered ? "Face Registered" : "Face Pending",
+                  color: _isFaceRegistered ? Colors.green : Colors.orange,
+                ),
+                _statusChip(
+                  icon: Icons.radar,
+                  label: _geofenceLabel,
+                  color: _geofenceColor,
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: inOutButton(
+                    "SELFIE IN",
+                    Colors.green,
+                    _callMarkInFunction,
+                    context: context,
+                    enabled: _canMarkIn,
+                    disabledMessage: _markInDisabledMessage,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: inOutButton(
+                    "SELFIE OUT",
+                    Colors.orangeAccent,
+                    _callMarkOutFunction,
+                    context: context,
+                    enabled: _canMarkOut,
+                    disabledMessage: _markOutDisabledMessage,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _buildTodayAttendanceCard(),
+          ],
         ),
       ),
     );
