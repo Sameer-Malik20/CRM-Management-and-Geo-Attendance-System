@@ -1,11 +1,14 @@
 import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:geo_attendance_system/src/models/office.dart';
 import 'package:geo_attendance_system/src/services/admin_service.dart';
 import 'package:geo_attendance_system/src/ui/constants/colors.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:location/location.dart';
 import 'package:path_provider/path_provider.dart';
 
 class AdminConsolePage extends StatefulWidget {
@@ -669,6 +672,34 @@ class _AdminConsolePageState extends State<AdminConsolePage>
     _selectedManagerUid = widget.currentUser.uid;
   }
 
+  Future<LatLng?> _getCurrentGpsCoordinates() async {
+    final location = Location();
+    var serviceEnabled = await location.serviceEnabled();
+    if (!serviceEnabled) {
+      serviceEnabled = await location.requestService();
+    }
+    if (!serviceEnabled) {
+      return null;
+    }
+
+    var permissionStatus = await location.hasPermission();
+    if (permissionStatus == PermissionStatus.denied) {
+      permissionStatus = await location.requestPermission();
+    }
+    if (permissionStatus != PermissionStatus.granted) {
+      return null;
+    }
+
+    final currentLocation = await location.getLocation();
+    final latitude = currentLocation.latitude;
+    final longitude = currentLocation.longitude;
+    if (latitude == null || longitude == null) {
+      return null;
+    }
+
+    return LatLng(latitude, longitude);
+  }
+
   Future<void> _openSiteSheet({Office? site}) async {
     final nameController = TextEditingController(text: site?.name ?? '');
     final latitudeController =
@@ -682,6 +713,14 @@ class _AdminConsolePageState extends State<AdminConsolePage>
       site?.latitude ?? 28.6139,
       site?.longitude ?? 77.2090,
     );
+    LatLng? currentGpsCoordinates;
+    GoogleMapController? mapController;
+    var isFetchingGps = site == null;
+
+    if (site == null) {
+      latitudeController.text = selectedCoordinates.latitude.toStringAsFixed(6);
+      longitudeController.text = selectedCoordinates.longitude.toStringAsFixed(6);
+    }
 
     await showModalBottomSheet<void>(
       context: context,
@@ -689,6 +728,43 @@ class _AdminConsolePageState extends State<AdminConsolePage>
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            Future<void> fetchGpsIfNeeded() async {
+              if (!isFetchingGps) {
+                return;
+              }
+
+              final gpsCoordinates = await _getCurrentGpsCoordinates();
+              if (!context.mounted) {
+                return;
+              }
+
+              setModalState(() {
+                isFetchingGps = false;
+                currentGpsCoordinates = gpsCoordinates;
+                if (site == null && gpsCoordinates != null) {
+                  selectedCoordinates = gpsCoordinates;
+                  latitudeController.text =
+                      gpsCoordinates.latitude.toStringAsFixed(6);
+                  longitudeController.text =
+                      gpsCoordinates.longitude.toStringAsFixed(6);
+                }
+              });
+
+              if (site == null && gpsCoordinates != null) {
+                await mapController?.animateCamera(
+                  CameraUpdate.newCameraPosition(
+                    CameraPosition(target: gpsCoordinates, zoom: 17),
+                  ),
+                );
+              }
+            }
+
+            if (isFetchingGps) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                fetchGpsIfNeeded();
+              });
+            }
+
             return Padding(
               padding: EdgeInsets.only(
                 left: 16,
@@ -709,10 +785,19 @@ class _AdminConsolePageState extends State<AdminConsolePage>
                       ),
                     ),
                     const SizedBox(height: 12),
-                    const Text(
-                      "Tap the map to pick the exact site location, then set the attendance radius in meters.",
-                      style: TextStyle(color: Colors.black54),
+                    Text(
+                      isFetchingGps
+                          ? "Form is ready. Current GPS is being fetched in the background. You can still zoom, pan, and pick a custom location right away."
+                          : currentGpsCoordinates == null
+                          ? "Tap the map to pick the exact site location, then set the attendance radius in meters."
+                          : "Current GPS has been detected automatically. You can zoom, pan, or tap anywhere on the map to pick a custom location.",
+                      style: const TextStyle(color: Colors.black54),
                     ),
+                    if (isFetchingGps)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: LinearProgressIndicator(minHeight: 3),
+                      ),
                     const SizedBox(height: 16),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(18),
@@ -723,6 +808,14 @@ class _AdminConsolePageState extends State<AdminConsolePage>
                             target: selectedCoordinates,
                             zoom: site == null ? 14 : 16,
                           ),
+                          onMapCreated: (controller) {
+                            mapController = controller;
+                          },
+                          gestureRecognizers: {
+                            Factory<OneSequenceGestureRecognizer>(
+                              () => EagerGestureRecognizer(),
+                            ),
+                          },
                           markers: {
                             Marker(
                               markerId: const MarkerId('selected-site'),
@@ -753,12 +846,45 @@ class _AdminConsolePageState extends State<AdminConsolePage>
                                   value.longitude.toStringAsFixed(6);
                             });
                           },
-                          zoomControlsEnabled: false,
-                          myLocationButtonEnabled: false,
+                          zoomControlsEnabled: true,
+                          zoomGesturesEnabled: true,
+                          scrollGesturesEnabled: true,
+                          rotateGesturesEnabled: true,
+                          tiltGesturesEnabled: true,
+                          myLocationEnabled: currentGpsCoordinates != null,
+                          myLocationButtonEnabled: currentGpsCoordinates != null,
                         ),
                       ),
                     ),
                     const SizedBox(height: 14),
+                    if (currentGpsCoordinates != null)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed: () async {
+                            final gpsCoordinates = currentGpsCoordinates!;
+                            setModalState(() {
+                              selectedCoordinates = gpsCoordinates;
+                              latitudeController.text = gpsCoordinates
+                                  .latitude
+                                  .toStringAsFixed(6);
+                              longitudeController.text = gpsCoordinates
+                                  .longitude
+                                  .toStringAsFixed(6);
+                            });
+                            await mapController?.animateCamera(
+                              CameraUpdate.newCameraPosition(
+                                CameraPosition(
+                                  target: gpsCoordinates,
+                                  zoom: 17,
+                                ),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.my_location),
+                          label: const Text("Use Current GPS"),
+                        ),
+                      ),
                     _inputField(nameController, "Site Name"),
                     Row(
                       children: [
