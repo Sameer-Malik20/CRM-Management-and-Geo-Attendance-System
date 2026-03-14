@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:geo_attendance_system/src/models/office.dart';
 import 'package:geo_attendance_system/src/services/admin_service.dart';
 import 'package:geo_attendance_system/src/ui/constants/colors.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 
 class AdminConsolePage extends StatefulWidget {
@@ -677,76 +678,164 @@ class _AdminConsolePageState extends State<AdminConsolePage>
     final radiusController = TextEditingController(
       text: site != null ? site.radius.toStringAsFixed(0) : '200',
     );
+    LatLng selectedCoordinates = LatLng(
+      site?.latitude ?? 28.6139,
+      site?.longitude ?? 77.2090,
+    );
 
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 20,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                site == null ? "Add Site" : "Edit Site",
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                ),
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
               ),
-              const SizedBox(height: 16),
-              _inputField(nameController, "Site Name"),
-              _inputField(latitudeController, "Latitude"),
-              _inputField(longitudeController, "Longitude"),
-              _inputField(radiusController, "Radius (meters)"),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: splashScreenColorTop,
-                  ),
-                  onPressed: () async {
-                    final latitude =
-                        double.tryParse(latitudeController.text.trim());
-                    final longitude =
-                        double.tryParse(longitudeController.text.trim());
-                    final radius =
-                        double.tryParse(radiusController.text.trim());
-                    if (nameController.text.trim().isEmpty ||
-                        latitude == null ||
-                        longitude == null ||
-                        radius == null) {
-                      _showMessage("Please enter valid site details.", isError: true);
-                      return;
-                    }
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      site == null ? "Add Site" : "Edit Site",
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      "Tap the map to pick the exact site location, then set the attendance radius in meters.",
+                      style: TextStyle(color: Colors.black54),
+                    ),
+                    const SizedBox(height: 16),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: SizedBox(
+                        height: 240,
+                        child: GoogleMap(
+                          initialCameraPosition: CameraPosition(
+                            target: selectedCoordinates,
+                            zoom: site == null ? 14 : 16,
+                          ),
+                          markers: {
+                            Marker(
+                              markerId: const MarkerId('selected-site'),
+                              position: selectedCoordinates,
+                              infoWindow: const InfoWindow(
+                                title: 'Selected Site Location',
+                              ),
+                            ),
+                          },
+                          circles: {
+                            Circle(
+                              circleId: const CircleId('site-radius'),
+                              center: selectedCoordinates,
+                              radius:
+                                  double.tryParse(radiusController.text.trim()) ??
+                                      200,
+                              strokeColor: splashScreenColorTop,
+                              strokeWidth: 2,
+                              fillColor: splashScreenColorTop.withOpacity(0.12),
+                            ),
+                          },
+                          onTap: (value) {
+                            setModalState(() {
+                              selectedCoordinates = value;
+                              latitudeController.text =
+                                  value.latitude.toStringAsFixed(6);
+                              longitudeController.text =
+                                  value.longitude.toStringAsFixed(6);
+                            });
+                          },
+                          zoomControlsEnabled: false,
+                          myLocationButtonEnabled: false,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _inputField(nameController, "Site Name"),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _inputField(latitudeController, "Latitude"),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _inputField(longitudeController, "Longitude"),
+                        ),
+                      ],
+                    ),
+                    _inputField(radiusController, "Radius (meters)"),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () {
+                          setModalState(() {
+                            latitudeController.text =
+                                selectedCoordinates.latitude.toStringAsFixed(6);
+                            longitudeController.text =
+                                selectedCoordinates.longitude.toStringAsFixed(6);
+                          });
+                        },
+                        icon: const Icon(Icons.place),
+                        label: const Text("Use Selected Map Location"),
+                      ),
+                    ),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: splashScreenColorTop,
+                        ),
+                        onPressed: () async {
+                          final latitude =
+                              double.tryParse(latitudeController.text.trim());
+                          final longitude =
+                              double.tryParse(longitudeController.text.trim());
+                          final radius =
+                              double.tryParse(radiusController.text.trim());
+                          if (nameController.text.trim().isEmpty ||
+                              latitude == null ||
+                              longitude == null ||
+                              radius == null ||
+                              radius <= 0) {
+                            _showMessage(
+                              "Please enter valid site details.",
+                              isError: true,
+                            );
+                            return;
+                          }
 
-                    try {
-                      await _adminService.saveSite(
-                        siteKey: site?.key,
-                        name: nameController.text.trim(),
-                        latitude: latitude,
-                        longitude: longitude,
-                        radius: radius,
-                      );
-                      if (!mounted) return;
-                      Navigator.of(context).pop();
-                      _showMessage("Site saved successfully.");
-                      await _refreshData();
-                    } catch (error) {
-                      _showMessage(error.toString(), isError: true);
-                    }
-                  },
-                  child: Text(site == null ? "Create Site" : "Save Site"),
+                          try {
+                            await _adminService.saveSite(
+                              siteKey: site?.key,
+                              name: nameController.text.trim(),
+                              latitude: latitude,
+                              longitude: longitude,
+                              radius: radius,
+                            );
+                            if (!mounted) return;
+                            Navigator.of(context).pop();
+                            _showMessage("Site saved successfully.");
+                            await _refreshData();
+                          } catch (error) {
+                            _showMessage(error.toString(), isError: true);
+                          }
+                        },
+                        child: Text(site == null ? "Create Site" : "Save Site"),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            );
+          },
         );
       },
     );

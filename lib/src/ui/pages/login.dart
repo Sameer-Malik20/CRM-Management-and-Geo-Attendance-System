@@ -47,11 +47,23 @@ class _LoginState extends State<Login> {
 
   @override
   void initState() {
+    super.initState();
     _userRef = db.reference().child("users");
     _empIdRef = db.reference().child('EmployeeID');
     authObject = new Auth();
+    _redirectIfAlreadyLoggedIn();
+  }
 
-    super.initState();
+  Future<void> _redirectIfAlreadyLoggedIn() async {
+    final currentUser = await authObject.getCurrentUser();
+    if (!mounted || currentUser == null) {
+      return;
+    }
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => HomePage(user: currentUser)),
+      (route) => false,
+    );
   }
 
   bool validateAndSave() {
@@ -362,9 +374,9 @@ class _LoginState extends State<Login> {
         //   }
         // });
 
-        Navigator.pushReplacement(
-          context,
+        Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => HomePage(user: _user)),
+          (route) => false,
         );
       } catch (e) {
         Navigator.of(context).pop();

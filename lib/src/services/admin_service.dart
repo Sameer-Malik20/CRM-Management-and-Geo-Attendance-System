@@ -99,7 +99,7 @@ class AdminCreateUserRequest {
 }
 
 class AdminService {
-  static const String _apiKey = 'AIzaSyDSp4rP6uKcwvoFH2MjvOjXQ_hfdyVvzxk';
+  static const String _apiKey = 'AIzaSyBJvn4I1Z1Nqf7WjYq2mhF_jhn0rw_dFYA';
   static final DatabaseReference _database =
       FirebaseDatabase.instance.reference();
 

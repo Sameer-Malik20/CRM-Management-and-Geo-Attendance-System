@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geo_attendance_system/src/models/office.dart';
 import 'package:geo_attendance_system/src/services/fetch_offices.dart';
 import 'package:geo_attendance_system/src/services/geofencing.dart';
@@ -62,39 +63,45 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          "DASHBOARD",
-          style: TextStyle(
-            fontSize: 24.0,
-            fontFamily: "Poppins-Medium",
-            fontWeight: FontWeight.w300,
-            letterSpacing: 0.6,
-          ),
-        ),
-        elevation: 0.0,
-        backgroundColor: dashBoardColor,
-        centerTitle: true,
-      ),
-      drawer: Drawer(
-        child: NavigationPanel(user: widget.user),
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [splashScreenColorBottom, splashScreenColorTop],
-            begin: Alignment.bottomCenter,
-            end: Alignment.topRight,
-          ),
-        ),
-        child: Column(
-          children: [
-            _buildStatusBanner(),
-            Expanded(
-              child: DashboardMainPanel(user: widget.user),
+    return WillPopScope(
+      onWillPop: () async {
+        await SystemNavigator.pop();
+        return false;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text(
+            "DASHBOARD",
+            style: TextStyle(
+              fontSize: 24.0,
+              fontFamily: "Poppins-Medium",
+              fontWeight: FontWeight.w300,
+              letterSpacing: 0.6,
             ),
-          ],
+          ),
+          elevation: 0.0,
+          backgroundColor: dashBoardColor,
+          centerTitle: true,
+        ),
+        drawer: Drawer(
+          child: NavigationPanel(user: widget.user),
+        ),
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [splashScreenColorBottom, splashScreenColorTop],
+              begin: Alignment.bottomCenter,
+              end: Alignment.topRight,
+            ),
+          ),
+          child: Column(
+            children: [
+              _buildStatusBanner(),
+              Expanded(
+                child: DashboardMainPanel(user: widget.user),
+              ),
+            ],
+          ),
         ),
       ),
     );

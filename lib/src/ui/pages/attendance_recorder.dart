@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geo_attendance_system/src/models/user.dart' show Employee;
+import 'package:geo_attendance_system/src/models/office.dart';
 import 'package:geo_attendance_system/src/services/attendance_mark.dart';
 import 'package:geo_attendance_system/src/services/fetch_attendance.dart';
 import 'package:geo_attendance_system/src/services/fetch_offices.dart';
@@ -53,6 +54,7 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
   GeoFencingService? geoFencingService;
   GeofenceStatus geofenceStatus = GeofenceStatus.init;
   Employee? _employee;
+  Office? _allottedOffice;
   Map<String, dynamic>? _profileData;
   Map<String, dynamic>? _todayAttendanceMap;
   bool _isMarkingAttendance = false;
@@ -94,9 +96,11 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
   Future<void> _loadEmployeeData() async {
     final employee = await UserDatabase.getDetailsFromUID(widget.user.uid);
     final profileData = await UserDatabase.getProfileData(widget.user.uid);
+    final office = await officeDatabase.getOfficeBasedOnUID(widget.user.uid);
     if (!mounted) return;
     setState(() {
       _employee = employee;
+      _allottedOffice = office;
       _profileData = profileData;
     });
   }
@@ -779,13 +783,35 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
 
   bool get _isCurrentlyIn => _hasOpenInEntry;
 
-  bool get _canMarkIn => !_isMarkingAttendance && !_isCurrentlyIn;
+  bool get _canMarkIn =>
+      !_isMarkingAttendance &&
+      !_isCurrentlyIn &&
+      _isFaceRegistered &&
+      _currentLocation != null &&
+      _effectiveGeofenceStatus == GeofenceStatus.enter;
 
-  bool get _canMarkOut => !_isMarkingAttendance && _hasOpenInEntry;
+  bool get _canMarkOut =>
+      !_isMarkingAttendance &&
+      _hasOpenInEntry &&
+      _isFaceRegistered &&
+      _currentLocation != null &&
+      _effectiveGeofenceStatus == GeofenceStatus.enter;
 
   String get _markInDisabledMessage {
     if (_isMarkingAttendance) {
       return "Attendance is being processed.";
+    }
+    if (!_isFaceRegistered) {
+      return "Please register your face from Profile first.";
+    }
+    if (_currentLocation == null) {
+      return "Current location is still loading.";
+    }
+    if (_effectiveGeofenceStatus == GeofenceStatus.exit) {
+      return "Site Outside. Move inside the assigned site radius to mark IN.";
+    }
+    if (_effectiveGeofenceStatus == GeofenceStatus.init) {
+      return "Site validation is still syncing.";
     }
     if (_isCurrentlyIn) {
       return "You are already IN.";
@@ -796,6 +822,18 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
   String get _markOutDisabledMessage {
     if (_isMarkingAttendance) {
       return "Attendance is being processed.";
+    }
+    if (!_isFaceRegistered) {
+      return "Please register your face from Profile first.";
+    }
+    if (_currentLocation == null) {
+      return "Current location is still loading.";
+    }
+    if (_effectiveGeofenceStatus == GeofenceStatus.exit) {
+      return "Site Outside. Move inside the assigned site radius to mark OUT.";
+    }
+    if (_effectiveGeofenceStatus == GeofenceStatus.init) {
+      return "Site validation is still syncing.";
     }
     if (_todayAttendanceKeys.isEmpty) {
       return "Please mark IN first.";
@@ -829,19 +867,31 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
   String get _locationStatusLabel =>
       _currentLocation == null ? "Location Syncing" : "Location Ready";
 
+  GeofenceStatus get _effectiveGeofenceStatus {
+    final office = _allottedOffice;
+    if (office == null) {
+      return geofenceStatus;
+    }
+    final resolvedStatus =
+        GeoFencingService.resolveStatus(office, _currentLocation);
+    return resolvedStatus == GeofenceStatus.init
+        ? geofenceStatus
+        : resolvedStatus;
+  }
+
   String get _geofenceLabel {
-    switch (geofenceStatus) {
+    switch (_effectiveGeofenceStatus) {
       case GeofenceStatus.enter:
         return "Inside Site";
       case GeofenceStatus.exit:
-        return "Outside Site";
+        return "Site Outside";
       case GeofenceStatus.init:
         return "Site Check Syncing";
     }
   }
 
   Color get _geofenceColor {
-    switch (geofenceStatus) {
+    switch (_effectiveGeofenceStatus) {
       case GeofenceStatus.enter:
         return Colors.green;
       case GeofenceStatus.exit:

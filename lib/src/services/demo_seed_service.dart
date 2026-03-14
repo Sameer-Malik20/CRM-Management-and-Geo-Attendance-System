@@ -62,7 +62,7 @@ class DemoSeedService {
       'name': 'Demo Construction Site',
       'latitude': 28.6139,
       'longitude': 77.2090,
-      'radius': 5000000,
+      'radius': 200,
     });
 
     final superAdminUid = await _ensureUser(
