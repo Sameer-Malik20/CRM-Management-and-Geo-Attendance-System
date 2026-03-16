@@ -20,6 +20,36 @@ class FaceApiResponse {
   });
 }
 
+class FaceApiGroupMatch {
+  final String employeeId;
+  final String employeeName;
+  final double? confidence;
+  final bool matched;
+  final Map<String, double> box;
+
+  const FaceApiGroupMatch({
+    required this.employeeId,
+    required this.employeeName,
+    this.confidence,
+    required this.matched,
+    required this.box,
+  });
+}
+
+class FaceApiGroupResponse {
+  final bool success;
+  final String message;
+  final List<FaceApiGroupMatch> matches;
+  final List<FaceApiGroupMatch> detections;
+
+  const FaceApiGroupResponse({
+    required this.success,
+    required this.message,
+    required this.matches,
+    required this.detections,
+  });
+}
+
 enum FaceBackendWarmupState { checking, warmingUp, ready, unavailable }
 
 class FaceBackendWarmupInfo {
@@ -158,7 +188,7 @@ class FaceAttendanceApi {
 
   static Future<FaceApiResponse> verifyFace({
     required String imagePath,
-    required String expectedEmployeeId,
+    String? expectedEmployeeId,
   }) async {
     try {
       final request = http.MultipartRequest(
@@ -178,7 +208,9 @@ class FaceAttendanceApi {
 
       if (response.statusCode == 200) {
         final matchedEmployeeId = payload['empId']?.toString();
-        if (matchedEmployeeId != expectedEmployeeId) {
+        final trimmedExpectedEmployeeId = expectedEmployeeId?.trim() ?? '';
+        if (trimmedExpectedEmployeeId.isNotEmpty &&
+            matchedEmployeeId != trimmedExpectedEmployeeId) {
           return FaceApiResponse(
             success: false,
             employeeId: matchedEmployeeId,
@@ -215,6 +247,111 @@ class FaceAttendanceApi {
             'Could not connect to the face server. Please check the backend URL and server status.',
       );
     }
+  }
+
+  static Future<FaceApiGroupResponse> verifyGroupFaces({
+    required String imagePath,
+  }) async {
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/recognize-group'),
+      )..files.add(
+          await http.MultipartFile.fromPath(
+            'image',
+            imagePath,
+            contentType: MediaType('image', 'jpeg'),
+          ),
+        );
+
+      final response = await request.send();
+      final body = await response.stream.bytesToString();
+      final payload = _decodePayload(body);
+      final rawMatches = payload['matches'];
+      final rawDetections = payload['detections'];
+      final matches = rawMatches is List
+          ? rawMatches
+              .whereType<Map>()
+              .map(
+                (rawMatch) => FaceApiGroupMatch(
+                  employeeId: rawMatch['empId']?.toString() ?? '',
+                  employeeName: rawMatch['name']?.toString() ?? '',
+                  confidence: double.tryParse(
+                    rawMatch['confidence']?.toString() ?? '',
+                  ),
+                  matched: rawMatch['matched'] == true ||
+                      (rawMatch['empId']?.toString().isNotEmpty ?? false),
+                  box: _parseBox(rawMatch['box']),
+                ),
+              )
+              .where((match) => match.employeeId.isNotEmpty)
+              .toList()
+          : <FaceApiGroupMatch>[];
+      final detections = rawDetections is List
+          ? rawDetections
+              .whereType<Map>()
+              .map(
+                (rawMatch) => FaceApiGroupMatch(
+                  employeeId: rawMatch['empId']?.toString() ?? '',
+                  employeeName: rawMatch['name']?.toString() ?? '',
+                  confidence: double.tryParse(
+                    rawMatch['confidence']?.toString() ?? '',
+                  ),
+                  matched: rawMatch['matched'] == true ||
+                      (rawMatch['empId']?.toString().isNotEmpty ?? false),
+                  box: _parseBox(rawMatch['box']),
+                ),
+              )
+              .toList()
+          : matches;
+
+      if (response.statusCode == 200) {
+        return FaceApiGroupResponse(
+          success: true,
+          message: _extractMessage(
+            payload,
+            'Face group verified successfully.',
+          ),
+          matches: matches,
+          detections: detections,
+        );
+      }
+
+      return FaceApiGroupResponse(
+        success: false,
+        message: _extractMessage(
+          payload,
+          'Group face verification failed.',
+        ),
+        matches: matches,
+        detections: detections,
+      );
+    } catch (_) {
+      return const FaceApiGroupResponse(
+        success: false,
+        message:
+            'Could not connect to the face server. Please check the backend URL and server status.',
+        matches: <FaceApiGroupMatch>[],
+        detections: <FaceApiGroupMatch>[],
+      );
+    }
+  }
+
+  static Map<String, double> _parseBox(dynamic rawBox) {
+    if (rawBox is Map) {
+      return {
+        'x': double.tryParse(rawBox['x']?.toString() ?? '') ?? 0,
+        'y': double.tryParse(rawBox['y']?.toString() ?? '') ?? 0,
+        'width': double.tryParse(rawBox['width']?.toString() ?? '') ?? 0,
+        'height': double.tryParse(rawBox['height']?.toString() ?? '') ?? 0,
+      };
+    }
+    return const {
+      'x': 0,
+      'y': 0,
+      'width': 0,
+      'height': 0,
+    };
   }
 
   static Map<String, dynamic> _decodePayload(String body) {

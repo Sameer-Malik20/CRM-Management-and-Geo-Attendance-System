@@ -140,6 +140,19 @@ class NavigationPanel extends StatefulWidget {
 class _NavigationPanelState extends State<NavigationPanel> {
   final _databaseReference = FirebaseDatabase.instance.reference();
 
+  Future<void> _handleLogout() async {
+    Navigator.of(context).pop();
+    final auth = Auth();
+    await auth.signOut();
+    if (!mounted) {
+      return;
+    }
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => Login()),
+      (Route<dynamic> route) => false,
+    );
+  }
+
   Widget drawerTile(String title, Function() onTap, [IconData? icon]) {
     return ListTile(
       leading: Icon(icon, color: dashBoardColor),
@@ -307,13 +320,7 @@ class _NavigationPanelState extends State<NavigationPanel> {
                       user: widget.user,
                     )));
           }, Icons.perm_identity),
-          drawerTile("Logout", () {
-            Auth auth = new Auth();
-            auth.signOut();
-            Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (context) => Login()),
-                (Route<dynamic> route) => false);
-          }, Icons.exit_to_app),
+          drawerTile("Logout", _handleLogout, Icons.exit_to_app),
         ],
       ),
     );

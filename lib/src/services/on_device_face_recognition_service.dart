@@ -34,6 +34,16 @@ class FaceEmbeddingResult {
   });
 }
 
+class DetectedFaceEmbedding {
+  final List<double> embedding;
+  final Rect boundingBox;
+
+  const DetectedFaceEmbedding({
+    required this.embedding,
+    required this.boundingBox,
+  });
+}
+
 class OnDeviceFaceRecognitionService {
   OnDeviceFaceRecognitionService._();
 
@@ -108,6 +118,64 @@ class OnDeviceFaceRecognitionService {
     );
   }
 
+  double get matchThreshold => _matchThreshold;
+
+  Future<List<DetectedFaceEmbedding>> createEmbeddingsFromImage(
+    String imagePath, {
+    int maxFaces = 10,
+  }) async {
+    final status = await initialize();
+    if (status.state != FaceEngineState.ready || _interpreter == null) {
+      return const <DetectedFaceEmbedding>[];
+    }
+
+    final inputImage = InputImage.fromFilePath(imagePath);
+    final faces = await _fileFaceDetector.processImage(inputImage);
+    if (faces.isEmpty) {
+      return const <DetectedFaceEmbedding>[];
+    }
+
+    final sourceFile = File(imagePath);
+    final originalBytes = await sourceFile.readAsBytes();
+    final decodedImage = img.decodeImage(originalBytes);
+    if (decodedImage == null) {
+      return const <DetectedFaceEmbedding>[];
+    }
+
+    final bakedImage = img.bakeOrientation(decodedImage);
+    final sortedFaces = [...faces]
+      ..sort((first, second) {
+        final firstArea =
+            first.boundingBox.width.abs() * first.boundingBox.height.abs();
+        final secondArea =
+            second.boundingBox.width.abs() * second.boundingBox.height.abs();
+        return secondArea.compareTo(firstArea);
+      });
+
+    final results = <DetectedFaceEmbedding>[];
+    for (final face in sortedFaces.take(maxFaces)) {
+      final croppedFace = _cropFaceImage(
+        source: bakedImage,
+        boundingBox: face.boundingBox,
+      );
+      if (croppedFace == null) {
+        continue;
+      }
+
+      final input = _imageToModelInput(croppedFace);
+      final output = List.generate(1, (_) => List<double>.filled(192, 0));
+      _interpreter!.run(input, output);
+      results.add(
+        DetectedFaceEmbedding(
+          embedding: _normalizeEmbedding(output.first),
+          boundingBox: face.boundingBox,
+        ),
+      );
+    }
+
+    return results;
+  }
+
   Future<FaceEmbeddingResult> verifyImageAgainstEmbedding({
     required String imagePath,
     required List<double> storedEmbedding,
@@ -159,6 +227,14 @@ class OnDeviceFaceRecognitionService {
     }
 
     return null;
+  }
+
+  bool isMatch(List<double> first, List<double> second) {
+    return compareEmbeddings(first, second) <= _matchThreshold;
+  }
+
+  double compareEmbeddings(List<double> first, List<double> second) {
+    return _euclideanDistance(first, second);
   }
 
   Future<void> _initializeInterpreter() async {

@@ -168,6 +168,7 @@ class _AdminConsolePageState extends State<AdminConsolePage>
                 isManager: false,
                 isSuperAdmin: false,
                 faceRegistered: false,
+                faceEmbeddingJson: '',
               ),
       );
 

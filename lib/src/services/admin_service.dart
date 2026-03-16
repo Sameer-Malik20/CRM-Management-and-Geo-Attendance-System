@@ -20,6 +20,7 @@ class AdminUserProfile {
   final bool isManager;
   final bool isSuperAdmin;
   final bool faceRegistered;
+  final String faceEmbeddingJson;
 
   const AdminUserProfile({
     required this.uid,
@@ -35,6 +36,7 @@ class AdminUserProfile {
     required this.isManager,
     required this.isSuperAdmin,
     required this.faceRegistered,
+    required this.faceEmbeddingJson,
   });
 
   AdminUserProfile copyWith({
@@ -51,6 +53,7 @@ class AdminUserProfile {
     bool? isManager,
     bool? isSuperAdmin,
     bool? faceRegistered,
+    String? faceEmbeddingJson,
   }) {
     return AdminUserProfile(
       uid: uid ?? this.uid,
@@ -66,6 +69,7 @@ class AdminUserProfile {
       isManager: isManager ?? this.isManager,
       isSuperAdmin: isSuperAdmin ?? this.isSuperAdmin,
       faceRegistered: faceRegistered ?? this.faceRegistered,
+      faceEmbeddingJson: faceEmbeddingJson ?? this.faceEmbeddingJson,
     );
   }
 }
@@ -148,6 +152,7 @@ class AdminService {
           isManager: _parseManagerFlag(userMap['isManager']),
           isSuperAdmin: userMap['isSuperAdmin'] == true,
           faceRegistered: userMap['faceRegistered'] == true,
+          faceEmbeddingJson: userMap['faceEmbeddingJson']?.toString() ?? '',
         ),
       );
     });
@@ -292,6 +297,7 @@ class AdminService {
       isManager: request.isManager,
       isSuperAdmin: request.isSuperAdmin,
       faceRegistered: false,
+      faceEmbeddingJson: '',
     );
   }
 
@@ -424,6 +430,18 @@ class AdminService {
     await _database.child('users').child(uid).update({
       'faceRegistered': registered,
       'faceRegisteredAt': registered ? DateTime.now().toIso8601String() : null,
+    });
+  }
+
+  Future<void> updateFaceEmbedding({
+    required String uid,
+    required List<double> embedding,
+  }) async {
+    await _database.child('users').child(uid).update({
+      'faceRegistered': true,
+      'faceRegisteredAt': DateTime.now().toIso8601String(),
+      'faceEmbeddingJson': jsonEncode(embedding),
+      'faceEmbeddingVersion': 'mobilefacenet-v1',
     });
   }
 

@@ -1,6 +1,6 @@
 # SusaGeo - CRM Management and Geo Attendance System
 
-SusaGeo is a Flutter-based workforce attendance and leave management application built for Android and iOS. It combines geo-fencing, selfie attendance, admin controls, and attendance history in a single mobile app experience for field teams, site workers, and managers.
+SusaGeo is a Flutter-based workforce attendance and leave management application built for Android and iOS. It combines geo-fencing, on-device face attendance, admin controls, and attendance history in a single mobile app experience for field teams, site workers, and managers.
 
 Last built by: Sameer Malik
 
@@ -9,8 +9,8 @@ Last built by: Sameer Malik
 - Flutter mobile app with one shared codebase for Android and iOS
 - Firebase Authentication and Firebase Realtime Database integration
 - Geo-fenced attendance based on allocated work sites
-- Selfie-based face registration and face verification before attendance
-- Render-hosted face backend with warm-up status handling for free-tier sleep
+- On-device face registration and face verification before attendance
+- On-device admin single and group attendance matching
 - Admin and super admin management tools
 - Leave application, approval, rejection, and withdrawal tracking
 - Attendance history with day view and date-range view
@@ -22,7 +22,7 @@ Last built by: Sameer Malik
 - Employee login using Employee ID
 - Super admin login using email and password
 - Location-aware attendance marking
-- Selfie attendance with face verification before `IN` and `OUT`
+- On-device selfie attendance with face verification before `IN` and `OUT`
 - Automatic `IN` / `OUT` validation to prevent duplicate marking
 - Today attendance summary with first `IN`, last `OUT`, and timeline
 - Attendance history that auto-loads today's records
@@ -42,10 +42,11 @@ Last built by: Sameer Malik
 - Reset face registration state
 - Delete users from app data records
 - Allocate sites with latitude, longitude, and attendance radius
-- Single-photo admin attendance for any worker
-- Group-photo admin attendance for up to 10 workers
-- Auto-detect group photo mode for recognized workers
-- Face registration by admin for workers
+- Single-worker admin attendance with optional Employee ID targeting
+- Automatic single-worker attendance when face alignment turns valid
+- Group attendance for up to 10 workers using on-device recognition
+- Auto-detect group attendance without pre-selecting Employee IDs
+- Face registration by admin for workers using the same on-device engine
 - Leave review with withdrawn leave visibility
 
 ### Super Admin Features
@@ -57,18 +58,20 @@ Last built by: Sameer Malik
 
 ### Face Attendance Features
 
+- MobileFaceNet + ML Kit on-device face recognition
 - Face registration flow for employees and admin-assisted onboarding
 - Face verification before selfie attendance
-- Render-hosted backend status banner
-- Warm-up indicator for sleeping Render free-tier server
-- Green ready state when the face backend becomes available
+- Single admin attendance with employee-style green guide circle
+- Automatic single admin attendance when the face stays aligned
+- Group admin attendance with live worker ID labels above detected faces
+- Front and back camera switching in admin attendance screens
 
 ## Current Selfie Attendance Flow
 
 1. Register face from `Profile -> Register Face`
 2. Open `Attendance Recorder`
 3. Stay inside the allocated site radius
-4. Selfie verification runs before marking attendance
+4. On-device face verification runs before marking attendance
 5. `IN` is disabled if the user is already `IN`
 6. `OUT` is disabled if the user is already `OUT`
 
@@ -76,18 +79,29 @@ Last built by: Sameer Malik
 
 ### Single Photo
 
-- Enter employee ID
-- Load the worker profile
-- Register face or mark attendance manually
+- Employee ID is optional
+- If Employee ID is blank, on-device matching auto-detects the worker
+- If Employee ID is provided, matching is restricted to that worker
+- Face guide circle turns green when alignment is good
+- Attendance marks automatically after stable aligned frames
 
 ### Group Photo
 
 - Manual mode: select up to 10 workers, then capture
-- Auto-detect mode: capture a group photo and let the backend identify recognized workers automatically
+- Auto-detect mode: capture a group photo and let on-device recognition identify matched workers automatically
+- Matched worker IDs appear above detected faces in the camera preview
 
-## Face Backend
+## Face Recognition Engine
 
-The face backend lives in [face_backend/app.py](face_backend/app.py).
+- Main employee attendance flow uses on-device recognition
+- Main admin single attendance flow uses on-device recognition
+- Main admin group attendance flow uses on-device recognition
+- Admin face registration uses on-device recognition
+- Stored face embeddings are saved in Firebase under each user profile
+
+### Legacy Backend
+
+The legacy backend still lives in [face_backend/app.py](face_backend/app.py). It can still be run or deployed for older flows and compatibility testing, but the primary face attendance experience now runs on-device.
 
 ### Local Run
 
@@ -104,10 +118,10 @@ python app.py
 - Render URL: `https://susageo-face-backend.onrender.com`
 - Health check: `https://susageo-face-backend.onrender.com/health`
 
-### App-to-Backend Configuration
+### Legacy App-to-Backend Configuration
 
-- Default app backend URL is the deployed Render backend
-- You can override it at build/run time:
+- Face backend URL override is now only needed for legacy backend testing
+- Primary attendance flows do not depend on Render for matching
 
 ```bash
 flutter run --dart-define=FACE_API_BASE_URL=https://susageo-face-backend.onrender.com
@@ -158,6 +172,8 @@ flutter build apk --debug --dart-define=FACE_API_BASE_URL=https://susageo-face-b
 - Firebase Realtime Database
 - Google Maps
 - Location / Geofencing
+- Google ML Kit Face Detection
+- MobileFaceNet (TFLite)
 - Flask
 - OpenCV
 - Render
@@ -166,9 +182,13 @@ flutter build apk --debug --dart-define=FACE_API_BASE_URL=https://susageo-face-b
 
 - SusaGeo branding
 - Super admin flow
-- Face backend deployment support
-- Render warm-up status UI
-- Selfie attendance verification
+- On-device face recognition for employees
+- On-device admin single attendance
+- On-device admin group attendance
+- Automatic single admin attendance
+- Front/back camera switching in admin attendance
+- Face guide circle for admin single attendance
+- Legacy face backend deployment support
 - Profile photo upload
 - Admin attendance tools
 - Auto group face detection

@@ -89,6 +89,58 @@ def _extract_face_from_array(image):
     return _normalize_face_image(face_region)
 
 
+def _extract_all_faces_from_array(image, max_faces=10):
+    if image is None:
+        return []
+
+    if len(image.shape) == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image
+
+    faces = FACE_DETECTOR.detectMultiScale(
+        gray,
+        scaleFactor=1.1,
+        minNeighbors=5,
+        minSize=(90, 90),
+    )
+
+    if len(faces) == 0:
+        return []
+
+    sorted_faces = sorted(
+        faces,
+        key=lambda face: face[2] * face[3],
+        reverse=True,
+    )[:max_faces]
+
+    extracted_faces = []
+    for x, y, w, h in sorted_faces:
+        padding_x = int(w * 0.18)
+        padding_y = int(h * 0.22)
+        x1 = max(x - padding_x, 0)
+        y1 = max(y - padding_y, 0)
+        x2 = min(x + w + padding_x, gray.shape[1])
+        y2 = min(y + h + padding_y, gray.shape[0])
+        face_region = gray[y1:y2, x1:x2]
+        normalized_face = _normalize_face_image(face_region)
+        if normalized_face is None:
+            continue
+        extracted_faces.append(
+            {
+                "face": normalized_face,
+                "box": {
+                    "x": int(x1),
+                    "y": int(y1),
+                    "width": int(x2 - x1),
+                    "height": int(y2 - y1),
+                },
+            }
+        )
+
+    return extracted_faces
+
+
 def _extract_face(image_path: Path, allow_existing_crop=False):
     image = cv2.imread(str(image_path))
     if image is None:
@@ -263,6 +315,91 @@ def recognize_face():
         )
 
     return jsonify({"status": "fail", "message": "No match found"}), 401
+
+
+@app.post("/recognize-group")
+def recognize_group_faces():
+    if "image" not in request.files:
+        return jsonify({"error": "No image provided"}), 400
+
+    uploaded_image = request.files["image"]
+    temp_path = TEMP_FOLDER / "verify_group.jpg"
+    uploaded_image.save(temp_path)
+
+    image = cv2.imread(str(temp_path))
+    detected_faces = _extract_all_faces_from_array(image, max_faces=10)
+    if not detected_faces:
+        return jsonify({"error": "No faces detected"}), 400
+
+    faces, labels, label_map = _load_training_data()
+    if len(faces) == 0:
+        return jsonify({"error": "No registered faces found"}), 400
+
+    recognizer = cv2.face.LBPHFaceRecognizer_create()
+    recognizer.train(faces, labels)
+
+    detections = []
+    seen_employee_ids = set()
+    for detected_face in detected_faces:
+        predicted_label, confidence = recognizer.predict(detected_face["face"])
+        matched = next(
+            (
+                (employee_id, payload["name"])
+                for employee_id, payload in label_map.items()
+                if payload["label"] == predicted_label
+            ),
+            None,
+        )
+
+        detection_payload = {
+            "empId": "",
+            "name": "",
+            "matched": False,
+            "confidence": round(float(confidence), 2),
+            "box": detected_face["box"],
+        }
+
+        if matched and confidence <= RECOGNITION_CONFIDENCE_THRESHOLD:
+            employee_id, employee_name = matched
+            if employee_id not in seen_employee_ids:
+                seen_employee_ids.add(employee_id)
+                detection_payload.update(
+                    {
+                        "empId": employee_id,
+                        "name": employee_name,
+                        "matched": True,
+                    }
+                )
+
+        detections.append(detection_payload)
+
+    matched_results = [item for item in detections if item["matched"]]
+    if not matched_results:
+        return (
+            jsonify(
+                {
+                    "status": "fail",
+                    "message": "No match found",
+                    "matches": [],
+                    "detections": detections,
+                }
+            ),
+            401,
+        )
+
+    matched_results.sort(key=lambda item: item["confidence"])
+    return (
+        jsonify(
+            {
+                "status": "success",
+                "message": f"{len(matched_results)} worker(s) matched successfully.",
+                "matches": matched_results,
+                "detections": detections,
+                "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        ),
+        200,
+    )
 
 if __name__ == "__main__":
     app.run(
