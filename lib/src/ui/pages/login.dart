@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -330,7 +332,7 @@ class _LoginState extends State<Login> {
     DataSnapshot dataSnapshot =
         (await _userRef.child(_user.uid).once()).snapshot;
 
-    if (dataSnapshot != null) {
+    if (dataSnapshot.value != null) {
       var uuid = (dataSnapshot.value as Map)["UUID"];
       List listOfDetails = await getDeviceDetails();
 
@@ -417,7 +419,7 @@ class _LoginState extends State<Login> {
         child: Container(
           width: scaleWidth(context, 120),
           height: 1.0,
-          color: Colors.black26.withOpacity(.2),
+          color: dashBoardColor.withValues(alpha: 0.14),
         ),
       );
 
@@ -425,159 +427,198 @@ class _LoginState extends State<Login> {
   Widget build(BuildContext context) {
     SystemChrome.setPreferredOrientations(
         [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
-    return new Scaffold(
-      backgroundColor: Colors.white,
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7F3EC),
       resizeToAvoidBottomInset: true,
       body: Container(
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: new AssetImage('assets/back.jpg'),
-            fit: BoxFit.fill,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFFF5EFE5),
+              Color(0xFFE6F0ED),
+              Color(0xFFDDE5EF),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-//          gradient: LinearGradient(
-//            colors: <Color>[Colors.white, Colors.grey[350]],
-//            begin: Alignment.topCenter,
-//            end: Alignment.bottomCenter,
-//          ),
         ),
         child: Stack(
-          fit: StackFit.expand,
           children: <Widget>[
-            /* Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: <Widget>[
-                Padding(
-                  padding: EdgeInsets.only(top: 20.0),
-                  child: Image.asset("assets/image_01.png"),
-                ),
-                Expanded(
-                  child: Container(),
-                ),
-                Image.asset("assets/image_02.png")
-              ],
-            ),*/
+            _backgroundOrb(
+              top: -90,
+              right: -30,
+              size: 220,
+              color: leaveCardcolor.withValues(alpha: 0.18),
+            ),
+            _backgroundOrb(
+              top: 180,
+              left: -60,
+              size: 180,
+              color: splashScreenColorBottom.withValues(alpha: 0.16),
+            ),
+            _backgroundOrb(
+              bottom: -60,
+              right: 20,
+              size: 190,
+              color: dashBoardColor.withValues(alpha: 0.10),
+            ),
             SingleChildScrollView(
               child: Padding(
-                padding: EdgeInsets.only(left: 28.0, right: 28.0, top: 60.0),
-                child: Column(
-                  children: <Widget>[
-                    Column(
-                      children: <Widget>[
-                        SusaGeoBranding(
-                          monogramSize: scaleWidth(context, 180),
-                          titleSize: scaleText(context, 72),
-                          subtitleSize: scaleText(context, 20),
-                        ),
-                        SizedBox(
-                          height: scaleHeight(context, 18),
-                        ),
-                        Text(
-                          "Susalabs Geo-Attendance and Workforce System",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              fontFamily: "Poppins-Bold",
-                              color: Colors.black54,
-                              fontSize: scaleText(context, 25),
-                              letterSpacing: 0.2,
-                              fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                    SizedBox(
-                      height: scaleHeight(context, 90),
-                    ),
-                    formCard(),
-                    SizedBox(height: scaleHeight(context, 40)),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: <Widget>[
-                        /*Row(
-                          children: <Widget>[
-                            SizedBox(
-                              width: 12.0,
-                            ),
-                            GestureDetector(
-                              onTap: _radio,
-                              child: radioButton(_isSelected),
-                            ),
-                            SizedBox(
-                              width: 8.0,
-                            ),
-                            Text("Remember me",
-                                style: TextStyle(
-                                    fontSize: 12, fontFamily: "Poppins-Medium"))
-                          ],
-                        ),*/
-                        InkWell(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
+                child: TweenAnimationBuilder<double>(
+                  duration: const Duration(milliseconds: 700),
+                  tween: Tween(begin: 0, end: 1),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, child) {
+                    return Opacity(
+                      opacity: value,
+                      child: Transform.translate(
+                        offset: Offset(0, (1 - value) * 36),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Column(
+                    children: <Widget>[
+                      const SizedBox(height: 22),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(32),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
                           child: Container(
-                            width: scaleWidth(context, 330),
-                            height: scaleHeight(context, 100),
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 22,
+                              vertical: 28,
+                            ),
                             decoration: BoxDecoration(
-                                gradient: LinearGradient(colors: [
-                                  splashScreenColorBottom,
-                                  Color(0xFF6078ea)
-                                ]),
-                                borderRadius: BorderRadius.circular(6.0),
-                                boxShadow: [
-                                  BoxShadow(
-                                      color: Color(0xFF6078ea).withOpacity(.3),
-                                      offset: Offset(0.0, 8.0),
-                                      blurRadius: 8.0)
-                                ]),
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: validateAndSubmit,
-                                child: Center(
-                                  child: Text("LOGIN",
-                                      style: TextStyle(
-                                          color: Colors.white,
-                                          fontFamily: "Poppins-Bold",
-                                          fontSize: 18,
-                                          letterSpacing: 1.0)),
+                              color: Colors.white.withValues(alpha: 0.62),
+                              borderRadius: BorderRadius.circular(32),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.45),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: dashBoardColor.withValues(alpha: 0.10),
+                                  blurRadius: 30,
+                                  offset: const Offset(0, 18),
                                 ),
+                              ],
+                            ),
+                            child: Column(
+                              children: <Widget>[
+                                SusaGeoBranding(
+                                  monogramSize: scaleWidth(context, 168),
+                                  titleSize: scaleText(context, 68),
+                                  subtitleSize: scaleText(context, 20),
+                                ),
+                                SizedBox(height: scaleHeight(context, 16)),
+                                Text(
+                                  "Premium workforce attendance for modern field teams",
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontFamily: "Bitter",
+                                    color: appbarcolor.withValues(alpha: 0.86),
+                                    fontSize: scaleText(context, 27),
+                                    height: 1.28,
+                                  ),
+                                ),
+                                SizedBox(height: scaleHeight(context, 10)),
+                                Text(
+                                  "Secure login, geo-fenced attendance, and on-device face verification in one elegant workflow.",
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontFamily: "Poppins-Medium",
+                                    color: Colors.black54,
+                                    fontSize: scaleText(context, 20),
+                                    height: 1.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: scaleHeight(context, 34)),
+                      formCard(),
+                      SizedBox(height: scaleHeight(context, 26)),
+                      SizedBox(
+                        width: double.infinity,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [dashBoardColor, splashScreenColorBottom],
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                            ),
+                            borderRadius: BorderRadius.circular(22),
+                            boxShadow: [
+                              BoxShadow(
+                                color: dashBoardColor.withValues(alpha: 0.24),
+                                blurRadius: 24,
+                                offset: const Offset(0, 12),
+                              ),
+                            ],
+                          ),
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              minimumSize: const Size.fromHeight(58),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(22),
+                              ),
+                            ),
+                            onPressed: validateAndSubmit,
+                            child: const Text(
+                              "ENTER SusaGeo",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontFamily: "Poppins-Bold",
+                                letterSpacing: 0.7,
+                                fontSize: 16,
                               ),
                             ),
                           ),
-                        )
-                      ],
-                    ),
-                    SizedBox(
-                      height: scaleHeight(context, 40),
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: <Widget>[
-                        horizontalLine(context),
-                        Text("Other Options",
-                            style: TextStyle(
-                                fontSize: 16.0, fontFamily: "Poppins-Medium")),
-                        horizontalLine(context)
-                      ],
-                    ),
-                    SizedBox(
-                      height: scaleHeight(context, 40),
-                    ),
-                    SizedBox(
-                      height: scaleHeight(context, 30),
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: <Widget>[
-                        Text(
-                          "Need login details? ",
-                          style: TextStyle(fontFamily: "Poppins-Medium"),
                         ),
-                        InkWell(
-                          onTap: _showContactAdminSheet,
-                          child: Text("Contact Admin",
-                              style: TextStyle(
-                                  color: splashScreenColorTop,
-                                  fontFamily: "Poppins-Bold")),
-                        )
-                      ],
-                    )
-                  ],
+                      ),
+                      SizedBox(height: scaleHeight(context, 26)),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: <Widget>[
+                          horizontalLine(context),
+                          Text(
+                            "More Options",
+                            style: TextStyle(
+                              fontSize: 15.0,
+                              color: dashBoardColor.withValues(alpha: 0.72),
+                              fontFamily: "Poppins-Medium",
+                            ),
+                          ),
+                          horizontalLine(context)
+                        ],
+                      ),
+                      SizedBox(height: scaleHeight(context, 24)),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          _pillAction(
+                            icon: Icons.key_rounded,
+                            label: "Forgot Password",
+                            onTap: _showForgotPasswordDialog,
+                          ),
+                          _pillAction(
+                            icon: Icons.support_agent,
+                            label: "Contact Admin",
+                            onTap: _showContactAdminSheet,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
                 ),
               ),
             )
@@ -588,119 +629,239 @@ class _LoginState extends State<Login> {
   }
 
   Widget formCard() {
-    return new Container(
-      width: double.infinity,
-      height: 260,
-      decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8.0),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black12,
-                offset: Offset(0.0, 15.0),
-                blurRadius: 15.0),
-            BoxShadow(
-                color: Colors.black12,
-                offset: Offset(0.0, -10.0),
-                blurRadius: 10.0),
-          ]),
-      child: Padding(
-        padding: EdgeInsets.only(left: 16.0, right: 16.0, top: 16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text("Login",
-                  style: TextStyle(
-                      fontSize: scaleText(context, 45),
-                      fontFamily: "Poppins-Bold",
-                      letterSpacing: .6)),
-              SizedBox(
-                height: scaleHeight(context, 30),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(30),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.70),
+            borderRadius: BorderRadius.circular(30.0),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.44)),
+            boxShadow: [
+              BoxShadow(
+                color: dashBoardColor.withValues(alpha: 0.10),
+                offset: const Offset(0.0, 18.0),
+                blurRadius: 28.0,
               ),
-              Container(
-                height: 60,
-                child: TextFormField(
-                  decoration: InputDecoration(
-                      focusedBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: dashBoardColor),
-                      ),
-                      icon: Icon(
-                        Icons.person,
-                        color: dashBoardColor,
-                      ),
-                      hintText: "Employee ID or Super Admin Email",
-                      hintStyle: TextStyle(color: Colors.grey, fontSize: 15.0)),
-                  validator: (value) => value == null || value.isEmpty
-                      ? 'Login ID cannot be empty.'
-                      : null,
-                  onSaved: (value) => _username = value?.trim(),
-                ),
+              BoxShadow(
+                color: Colors.white.withValues(alpha: 0.60),
+                offset: const Offset(0.0, -4.0),
+                blurRadius: 12.0,
               ),
-              Container(
-                height: 60,
-                child: TextFormField(
-                  obscureText: true,
-                  decoration: InputDecoration(
-                      focusedBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: dashBoardColor),
-                      ),
-                      icon: Icon(
-                        Icons.lock,
-                        color: dashBoardColor,
-                      ),
-                      hintText: "Password",
-                      hintStyle: TextStyle(color: Colors.grey, fontSize: 15.0)),
-                  validator: (value) => value == null || value.isEmpty
-                      ? 'Password can\'t be empty'
-                      : null,
-                  onChanged: (value) => _password = value,
-                ),
-              ),
-              Text(
-                _errorMessage,
-                style: TextStyle(color: Colors.red),
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 4.0),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  TextButton(
-                    style: ButtonStyle(
-                      padding: MaterialStateProperty.resolveWith(
-                        (states) => EdgeInsets.symmetric(horizontal: 16.0),
-                      ),
-                      shape: MaterialStateProperty.resolveWith(
-                        (states) => const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(2.0)),
+                  Text(
+                    "Welcome back",
+                    style: TextStyle(
+                      fontSize: scaleText(context, 44),
+                      fontFamily: "Bitter",
+                      color: appbarcolor,
+                      letterSpacing: .4,
+                    ),
+                  ),
+                  SizedBox(
+                    height: scaleHeight(context, 8),
+                  ),
+                  Text(
+                    "Sign in to continue into your attendance workspace.",
+                    style: TextStyle(
+                      color: Colors.black54,
+                      fontFamily: "Poppins-Medium",
+                      fontSize: scaleText(context, 20),
+                    ),
+                  ),
+                  SizedBox(
+                    height: scaleHeight(context, 24),
+                  ),
+                  TextFormField(
+                    style: const TextStyle(
+                      fontFamily: "Poppins-Medium",
+                      color: appbarcolor,
+                    ),
+                    decoration: InputDecoration(
+                      prefixIcon: Container(
+                        margin: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: surfaceAccent,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(
+                          Icons.person_outline_rounded,
+                          color: dashBoardColor,
                         ),
                       ),
-                      backgroundColor: MaterialStateProperty.resolveWith(
-                        (states) => Colors.blue,
+                      labelText: "Login ID",
+                      hintText: "Employee ID or Super Admin Email",
+                    ),
+                    validator: (value) => value == null || value.isEmpty
+                        ? 'Login ID cannot be empty.'
+                        : null,
+                    onSaved: (value) => _username = value?.trim(),
+                  ),
+                  const SizedBox(height: 18),
+                  TextFormField(
+                    obscureText: true,
+                    style: const TextStyle(
+                      fontFamily: "Poppins-Medium",
+                      color: appbarcolor,
+                    ),
+                    decoration: InputDecoration(
+                      prefixIcon: Container(
+                        margin: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: surfaceAccent,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(
+                          Icons.lock_outline_rounded,
+                          color: dashBoardColor,
+                        ),
+                      ),
+                      labelText: "Password",
+                      hintText: "Enter your password",
+                    ),
+                    validator: (value) => value == null || value.isEmpty
+                        ? 'Password can\'t be empty'
+                        : null,
+                    onChanged: (value) => _password = value,
+                  ),
+                  if (_errorMessage.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.red.withValues(alpha: 0.18),
+                        ),
+                      ),
+                      child: Text(
+                        _errorMessage,
+                        style: const TextStyle(color: Colors.red),
                       ),
                     ),
-                    onPressed: () => _formKey.currentState?.reset(),
-                    child: Text(
-                      "Reset",
-                      style: TextStyle(
-                          color: dashBoardColor,
-                          fontFamily: "Poppins-Medium",
-                          fontSize: scaleText(context, 28)),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: _showForgotPasswordDialog,
-                    child: Text(
-                      "Forgot Password?",
-                      style: TextStyle(
-                          color: splashScreenColorTop,
-                          fontFamily: "Poppins-Medium",
-                          fontSize: scaleText(context, 28)),
-                    ),
-                  ),
+                  ],
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: <Widget>[
+                      OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(
+                            color: dashBoardColor.withValues(alpha: 0.16),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        onPressed: () => _formKey.currentState?.reset(),
+                        child: Text(
+                          "Reset",
+                          style: TextStyle(
+                              color: appbarcolor,
+                              fontFamily: "Poppins-Medium",
+                              fontSize: scaleText(context, 28)),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _showForgotPasswordDialog,
+                        child: Text(
+                          "Forgot Password?",
+                          style: TextStyle(
+                              color: leaveCardcolor,
+                              fontFamily: "Poppins-Medium",
+                              fontSize: scaleText(context, 28)),
+                        ),
+                      ),
+                    ],
+                  )
                 ],
-              )
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _pillAction({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.76),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: dashBoardColor.withValues(alpha: 0.10),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: dashBoardColor, size: 18),
+              const SizedBox(width: 10),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: appbarcolor,
+                  fontFamily: "Poppins-Medium",
+                ),
+              ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _backgroundOrb({
+    double? top,
+    double? right,
+    double? bottom,
+    double? left,
+    required double size,
+    required Color color,
+  }) {
+    return Positioned(
+      top: top,
+      right: right,
+      bottom: bottom,
+      left: left,
+      child: IgnorePointer(
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(
+              colors: [
+                color,
+                color.withValues(alpha: 0.0),
+              ],
+            ),
           ),
         ),
       ),

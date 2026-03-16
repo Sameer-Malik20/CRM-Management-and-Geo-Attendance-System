@@ -142,10 +142,10 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
         // borderRadius: BorderRadius.circular(20.0),
         //  ),
         title: Text(
-          "Mark your Attendance",
+          "Attendance Recorder",
           style: TextStyle(
               color: Colors.white,
-              fontFamily: "Poppins-Medium",
+              fontFamily: "Bitter",
               fontSize: 22,
               letterSpacing: .6,
               fontWeight: FontWeight.bold),
@@ -245,13 +245,23 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
             ),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.96),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: const [
+              gradient: const LinearGradient(
+                colors: [
+                  Colors.white,
+                  Color(0xFFFFFBF6),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(
+                color: dashBoardColor.withValues(alpha: 0.08),
+              ),
+              boxShadow: [
                 BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 18,
-                  offset: Offset(0, 10),
+                  color: dashBoardColor.withValues(alpha: 0.12),
+                  blurRadius: 24,
+                  offset: const Offset(0, 14),
                 ),
               ],
             ),
@@ -291,7 +301,7 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
                 width: 54,
                 height: 5,
                 decoration: BoxDecoration(
-                  color: Colors.black26,
+                  color: dashBoardColor.withValues(alpha: 0.20),
                   borderRadius: BorderRadius.circular(20),
                 ),
               ),
@@ -301,6 +311,8 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
               "Selfie Attendance Required",
               style: TextStyle(
                 fontSize: 18,
+                color: appbarcolor,
+                fontFamily: "Bitter",
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -381,8 +393,13 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: splashScreenColorTop.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(14),
+            gradient: LinearGradient(
+              colors: [
+                leaveCardcolor.withValues(alpha: 0.18),
+                splashScreenColorBottom.withValues(alpha: 0.14),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(16),
           ),
           child:
               const Icon(Icons.keyboard_arrow_up, color: splashScreenColorTop),
@@ -397,6 +414,8 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
                 "Attendance Recorder",
                 style: TextStyle(
                   fontSize: 16,
+                  color: appbarcolor,
+                  fontFamily: "Bitter",
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -423,8 +442,15 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.blueGrey.shade50,
-        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(
+          colors: [
+            surfaceAccent,
+            Colors.white,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -433,6 +459,8 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
             "Today's Attendance",
             style: TextStyle(
               fontSize: 16,
+              color: appbarcolor,
+              fontFamily: "Bitter",
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -471,7 +499,14 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: dashBoardColor.withValues(alpha: 0.05),
+                            blurRadius: 12,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
                       ),
                       child: Row(
                         children: [
@@ -499,7 +534,14 @@ class AttendanceRecorderWidgetState extends State<AttendanceRecorderWidget> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: dashBoardColor.withValues(alpha: 0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -70,17 +70,9 @@ class _HomePageState extends State<HomePage> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text(
-            "DASHBOARD",
-            style: TextStyle(
-              fontSize: 24.0,
-              fontFamily: "Poppins-Medium",
-              fontWeight: FontWeight.w300,
-              letterSpacing: 0.6,
-            ),
-          ),
+          title: const Text("SusaGeo Workspace"),
           elevation: 0.0,
-          backgroundColor: dashBoardColor,
+          backgroundColor: appbarcolor,
           centerTitle: true,
         ),
         drawer: Drawer(
@@ -89,9 +81,12 @@ class _HomePageState extends State<HomePage> {
         body: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [splashScreenColorBottom, splashScreenColorTop],
-              begin: Alignment.bottomCenter,
-              end: Alignment.topRight,
+              colors: [
+                Color(0xFFF7F2EA),
+                Color(0xFFEFE8DD),
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
             ),
           ),
           child: Column(
@@ -122,9 +117,22 @@ class _HomePageState extends State<HomePage> {
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.14),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white24),
+        gradient: LinearGradient(
+          colors: [
+            splashScreenColorBottom.withValues(alpha: 0.92),
+            appbarcolor.withValues(alpha: 0.94),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: dashBoardColor.withValues(alpha: 0.16),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -140,6 +148,7 @@ class _HomePageState extends State<HomePage> {
                   : (message ?? "Dashboard loading..."),
               style: const TextStyle(
                 color: Colors.white,
+                height: 1.4,
                 fontWeight: FontWeight.w600,
               ),
             ),

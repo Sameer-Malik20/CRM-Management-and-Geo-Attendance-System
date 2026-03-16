@@ -106,23 +106,48 @@ class DashboardMainPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: const [splashScreenColorBottom, splashScreenColorTop],
-            begin: Alignment.bottomCenter,
-            end: Alignment.topRight,
+          gradient: const LinearGradient(
+            colors: [
+              Color(0xFFF7F2EA),
+              Color(0xFFECE7DE),
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
           ),
           borderRadius: BorderRadius.only(
               topLeft: Radius.circular(16), topRight: Radius.circular(16))),
-      child: Padding(
-        padding: const EdgeInsets.all(4.0),
-        child: GridView.count(
-          crossAxisCount: 2,
-          crossAxisSpacing: 12.0,
-          mainAxisSpacing: 12.0,
-          padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          childAspectRatio: 0.72,
-          children: _listWidget(context),
-        ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: -30,
+            right: -20,
+            child: Container(
+              width: 180,
+              height: 180,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    leaveCardcolor.withValues(alpha: 0.16),
+                    leaveCardcolor.withValues(alpha: 0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(10.0),
+            child: GridView.count(
+              crossAxisCount: 2,
+              crossAxisSpacing: 16.0,
+              mainAxisSpacing: 16.0,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+              childAspectRatio: 0.76,
+              children: _listWidget(context),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -186,14 +211,14 @@ class _NavigationPanelState extends State<NavigationPanel> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.white,
+      color: const Color(0xFFF8F3EC),
       child: ListView(
         padding: EdgeInsets.zero,
         children: <Widget>[
           DrawerHeader(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [dashBoardColor, appbarcolor],
+                colors: [splashScreenColorBottom, appbarcolor],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -211,7 +236,7 @@ class _NavigationPanelState extends State<NavigationPanel> {
                             ? MemoryImage(base64Decode(imageBase64))
                             : null;
                     return CircleAvatar(
-                      radius: 28,
+                      radius: 31,
                       backgroundColor: Colors.white24,
                       backgroundImage: imageProvider,
                       child: imageProvider == null
@@ -229,8 +254,10 @@ class _NavigationPanelState extends State<NavigationPanel> {
                           widget.user.email ??
                           "Logged In User",
                       style: const TextStyle(
+                        fontFamily: "Bitter",
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
+                        fontSize: 22,
                       ),
                     );
                   },
@@ -245,7 +272,10 @@ class _NavigationPanelState extends State<NavigationPanel> {
                 ),
                 const Text(
                   "Profile, attendance tools, and admin actions",
-                  style: TextStyle(color: Colors.white70),
+                  style: TextStyle(
+                    color: Colors.white70,
+                    height: 1.4,
+                  ),
                 ),
               ],
             ),
